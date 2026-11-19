@@ -67,9 +67,9 @@ import kotlin.math.roundToInt
 fun DashboardScreen(
     onAddActivity: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: CarbonViewModel = viewModel(),
+    viewModel: CarbonViewModel = viewModel(factory = CarbonViewModel.Factory),
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val state by viewModel.dashboardState.collectAsStateWithLifecycle()
     DashboardContent(state = state, onAddActivity = onAddActivity, modifier = modifier)
 }
 

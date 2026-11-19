@@ -34,7 +34,50 @@
     <string name="category_energy">Energy</string>
 
     <!-- Placeholders -->
-    <string name="placeholder_logbook">Add your trips and meals here. Emissions will be computed with official ADEME factors.</string>
     <string name="placeholder_energy">Live smart-meter readings from the MQTT broker and eco-mode alerts will appear here.</string>
     <string name="placeholder_map">OpenStreetMap routes and their CO2e comparison by transport mode will appear here.</string>
+
+    <!-- Logbook -->
+    <string name="logbook_new_activity">New activity</string>
+    <string name="logbook_distance">Distance</string>
+    <string name="logbook_meals">Number of meals</string>
+    <string name="logbook_invalid_quantity">Enter a number greater than 0 (max 20,000 km or 10 meals)</string>
+    <string name="logbook_estimate">Estimated impact: %1$s</string>
+    <string name="logbook_add">Add to logbook</string>
+    <string name="logbook_today">Today\'s activities</string>
+    <string name="logbook_today_total">Total: %1$s</string>
+    <string name="logbook_empty">No activity yet today. Add a trip, a flight or a meal above.</string>
+    <string name="logbook_delete">Delete: %1$s</string>
+    <string name="quantity_km">%1$s km</string>
+    <plurals name="quantity_meals">
+        <item quantity="one">%1$d meal</item>
+        <item quantity="other">%1$d meals</item>
+    </plurals>
+    <string name="factor_value_km">ADEME factor: %1$s kg CO2e per km</string>
+    <string name="factor_value_meal">ADEME factor: %1$s kg CO2e per meal</string>
+    <string name="factor_flight_note">Plane: the ADEME factor depends on the distance (short, medium or long haul) and includes contrails.</string>
+    <string name="factors_loading">Loading ADEME emission factors…</string>
+    <string name="factors_online">Official ADEME factors (Impact CO2 API)</string>
+    <string name="factors_offline">Offline: built-in ADEME backup factors are used</string>
+    <string name="action_retry">Retry</string>
+
+    <!-- Emission factors -->
+    <string name="factor_car_thermal">Car (petrol/diesel)</string>
+    <string name="factor_car_electric">Electric car</string>
+    <string name="factor_bus">Bus</string>
+    <string name="factor_tram">Tram</string>
+    <string name="factor_metro">Metro</string>
+    <string name="factor_ter">Regional train</string>
+    <string name="factor_tgv">High-speed train</string>
+    <string name="factor_ebike">E-bike</string>
+    <string name="factor_bike">Bike</string>
+    <string name="factor_walk">Walking</string>
+    <string name="factor_flight">Plane</string>
+    <string name="meal_beef">Beef meal</string>
+    <string name="meal_pork">Pork meal</string>
+    <string name="meal_chicken">Chicken meal</string>
+    <string name="meal_white_fish">White fish meal</string>
+    <string name="meal_oily_fish">Oily fish meal</string>
+    <string name="meal_vegetarian">Vegetarian meal</string>
+    <string name="meal_vegan">Vegan meal</string>
 </resources>

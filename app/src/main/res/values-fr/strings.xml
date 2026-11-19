@@ -34,7 +34,50 @@
     <string name="category_energy">Énergie</string>
 
     <!-- Écrans provisoires -->
-    <string name="placeholder_logbook">Ajoutez ici vos trajets et vos repas. Les émissions seront calculées avec les facteurs officiels de l\'ADEME.</string>
     <string name="placeholder_energy">Les relevés du compteur reçus via le broker MQTT et les alertes du mode éco s\'afficheront ici.</string>
     <string name="placeholder_map">Les itinéraires OpenStreetMap et leur comparaison en CO2e par mode de transport s\'afficheront ici.</string>
+
+    <!-- Journal -->
+    <string name="logbook_new_activity">Nouvelle activité</string>
+    <string name="logbook_distance">Distance</string>
+    <string name="logbook_meals">Nombre de repas</string>
+    <string name="logbook_invalid_quantity">Saisissez un nombre supérieur à 0 (20 000 km ou 10 repas au maximum)</string>
+    <string name="logbook_estimate">Impact estimé : %1$s</string>
+    <string name="logbook_add">Ajouter au journal</string>
+    <string name="logbook_today">Activités du jour</string>
+    <string name="logbook_today_total">Total : %1$s</string>
+    <string name="logbook_empty">Aucune activité pour l\'instant. Ajoutez un trajet, un vol ou un repas ci-dessus.</string>
+    <string name="logbook_delete">Supprimer : %1$s</string>
+    <string name="quantity_km">%1$s km</string>
+    <plurals name="quantity_meals">
+        <item quantity="one">%1$d repas</item>
+        <item quantity="other">%1$d repas</item>
+    </plurals>
+    <string name="factor_value_km">Facteur ADEME : %1$s kg CO2e par km</string>
+    <string name="factor_value_meal">Facteur ADEME : %1$s kg CO2e par repas</string>
+    <string name="factor_flight_note">Avion : le facteur ADEME dépend de la distance (court, moyen ou long courrier) et inclut les traînées de condensation.</string>
+    <string name="factors_loading">Chargement des facteurs d\'émission ADEME…</string>
+    <string name="factors_online">Facteurs officiels ADEME (API Impact CO2)</string>
+    <string name="factors_offline">Hors ligne : facteurs ADEME de secours intégrés</string>
+    <string name="action_retry">Réessayer</string>
+
+    <!-- Facteurs d'émission -->
+    <string name="factor_car_thermal">Voiture thermique</string>
+    <string name="factor_car_electric">Voiture électrique</string>
+    <string name="factor_bus">Bus</string>
+    <string name="factor_tram">Tramway</string>
+    <string name="factor_metro">Métro</string>
+    <string name="factor_ter">Train régional (TER)</string>
+    <string name="factor_tgv">TGV</string>
+    <string name="factor_ebike">Vélo électrique</string>
+    <string name="factor_bike">Vélo</string>
+    <string name="factor_walk">Marche</string>
+    <string name="factor_flight">Avion</string>
+    <string name="meal_beef">Repas avec du bœuf</string>
+    <string name="meal_pork">Repas avec du porc</string>
+    <string name="meal_chicken">Repas avec du poulet</string>
+    <string name="meal_white_fish">Repas avec du poisson blanc</string>
+    <string name="meal_oily_fish">Repas avec du poisson gras</string>
+    <string name="meal_vegetarian">Repas végétarien</string>
+    <string name="meal_vegan">Repas végétalien</string>
 </resources>

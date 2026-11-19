@@ -1,27 +1,33 @@
 package dte.masteriot.daily_carbon_tracker.data.model
 
+import androidx.annotation.StringRes
+
 /** Catégories d'activités saisissables dans le Journal. */
 enum class ActivityCategory { TRANSPORT, FLIGHT, MEAL, ENERGY }
 
 /** Modes de transport (Journal, autosuggestion par accéléromètre, comparatif d'itinéraires). */
 enum class TransportMode { WALK, BIKE, PUBLIC_TRANSPORT, CAR }
 
-/** Facteur d'émission ADEME : kg CO2e par unité (km, repas, kWh, m³…). */
+/** Unité de la quantité saisie : des kilomètres ou un nombre de repas. */
+enum class QuantityUnit { KM, MEAL }
+
+/** Facteur d'émission ADEME : kg CO2e par unité (par km ou par repas). */
 data class EmissionFactor(
     val id: String,
-    val label: String,
+    @StringRes val labelRes: Int,
     val category: ActivityCategory,
     val kgCo2ePerUnit: Double,
-    val unit: String,
+    val unit: QuantityUnit,
 )
 
-/** Une activité enregistrée dans le Journal du jour. */
+/** Une activité enregistrée dans le Journal. */
 data class ActivityEntry(
     val id: Long,
     val category: ActivityCategory,
-    val label: String,
+    val factorId: String,
+    @StringRes val labelRes: Int,
     val quantity: Double,
-    val unit: String,
+    val unit: QuantityUnit,
     val co2eKg: Double,
     val timestampMillis: Long,
 )
