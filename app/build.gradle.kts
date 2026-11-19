@@ -6,9 +6,8 @@ plugins {
 android {
     namespace = "dte.masteriot.daily_carbon_tracker"
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
+        // 37 requis par MQTTastic 0.4.0 et les bibliothèques AndroidX récentes
+        version = release(37)
     }
 
     defaultConfig {
@@ -38,14 +37,35 @@ android {
 }
 
 dependencies {
+    // Compose & AndroidX
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.navigation.compose)
+
+    // Brique A — API ADEME (Retrofit + Gson)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.gson)
+
+    // Brique B — MQTT (MQTTastic, transport TCP, comme dans le cours)
+    implementation(platform(libs.mqtt.client.bom))
+    implementation(libs.mqtt.client.core)
+    implementation(libs.mqtt.client.transport.tcp)
+    implementation(libs.ktor.client.core)
+    implementation(libs.kotlinx.coroutines.android)
+
+    // Brique D — Cartographie OpenStreetMap
+    implementation(libs.osmdroid.android)
+
+    // Tests
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
