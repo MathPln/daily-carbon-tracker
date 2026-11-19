@@ -45,10 +45,13 @@ data class TransportEmissionDto(
     val value: Double,
 )
 
-/** [ecv] : émission totale en kg CO2e de l'élément (ici : par repas). */
+/**
+ * [ecv] : émission totale en kg CO2e de l'élément (ici : par repas).
+ * Champs texte nullables : Gson ne respecte pas la non-nullité Kotlin si un champ manque.
+ */
 data class EcvItemDto(
     val name: String?,
-    val slug: String,
+    val slug: String?,
     val ecv: Double,
 )
 

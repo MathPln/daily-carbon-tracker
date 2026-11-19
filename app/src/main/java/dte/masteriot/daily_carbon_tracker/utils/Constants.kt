@@ -44,6 +44,19 @@ fun formatFactor(value: Double): String =
 fun formatTime(millis: Long): String =
     DateFormat.getTimeInstance(DateFormat.SHORT, Locale.getDefault()).format(Date(millis))
 
+/** Millisecondes restantes avant le prochain minuit (fuseau du téléphone). */
+fun millisUntilNextMidnight(now: Long = System.currentTimeMillis()): Long {
+    val nextMidnight = Calendar.getInstance().apply {
+        timeInMillis = now
+        add(Calendar.DAY_OF_YEAR, 1)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }
+    return nextMidnight.timeInMillis - now
+}
+
 /** true si l'instant donné tombe aujourd'hui (fuseau du téléphone). */
 fun isToday(millis: Long, now: Long = System.currentTimeMillis()): Boolean {
     val day = Calendar.getInstance().apply { timeInMillis = millis }

@@ -13,9 +13,12 @@ import dte.masteriot.daily_carbon_tracker.data.repository.FactorCatalog
 import dte.masteriot.daily_carbon_tracker.data.repository.FactorSource
 import dte.masteriot.daily_carbon_tracker.utils.Constants
 import dte.masteriot.daily_carbon_tracker.utils.isToday
+import dte.masteriot.daily_carbon_tracker.utils.millisUntilNextMidnight
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -81,7 +84,22 @@ data class LogbookUiState(
  */
 class CarbonViewModel(private val repository: CarbonRepository) : ViewModel() {
 
-    private val todayEntries = repository.entries.map { entries -> entries.filter { isToday(it.timestampMillis) } }
+    /**
+     * Émet l'heure actuelle tout de suite, puis juste après chaque minuit :
+     * le total du jour repart à zéro à minuit même si l'app reste ouverte.
+     * (Quand l'écran n'est plus affiché, le flux s'arrête ; il réémet l'heure
+     * actuelle dès que l'écran revient.)
+     */
+    private val dayTicker = flow {
+        while (true) {
+            emit(System.currentTimeMillis())
+            delay(millisUntilNextMidnight() + MIDNIGHT_MARGIN_MS)
+        }
+    }
+
+    private val todayEntries = combine(repository.entries, dayTicker) { entries, now ->
+        entries.filter { isToday(it.timestampMillis, now) }
+    }
 
     val dashboardState: StateFlow<DashboardUiState> = todayEntries
         .map { DashboardUiState.fromEntries(it) }
@@ -117,6 +135,9 @@ class CarbonViewModel(private val repository: CarbonRepository) : ViewModel() {
     }
 
     companion object {
+        /** Petite marge pour être sûr d'être passé au jour suivant. */
+        private const val MIDNIGHT_MARGIN_MS = 1_000L
+
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as CarbonApplication

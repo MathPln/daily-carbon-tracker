@@ -1,5 +1,6 @@
 package dte.masteriot.daily_carbon_tracker.data.repository
 
+import android.util.Log
 import dte.masteriot.daily_carbon_tracker.data.model.ActivityEntry
 import dte.masteriot.daily_carbon_tracker.data.remote.ImpactCo2Api
 import kotlinx.coroutines.CancellationException
@@ -59,6 +60,7 @@ class CarbonRepository(private val api: ImpactCo2Api) {
             throw e
         } catch (e: Exception) {
             // Pas de réseau, API indisponible ou réponse inattendue : jeu de secours.
+            Log.w(TAG, "Impact CO2 API unavailable, using built-in ADEME factors", e)
             _factorSource.value = FactorSource.OFFLINE_FALLBACK
         }
     }
@@ -117,5 +119,9 @@ class CarbonRepository(private val api: ImpactCo2Api) {
 
     fun removeActivity(id: Long) {
         _entries.update { entries -> entries.filterNot { it.id == id } }
+    }
+
+    private companion object {
+        const val TAG = "CarbonRepository"
     }
 }
