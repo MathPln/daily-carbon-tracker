@@ -14,6 +14,10 @@ object Constants {
     const val TOPIC_ALERTS = "carbon/alerts"
 }
 
+/** Formate un nombre de kg avec une décimale (« 3,2 » en français, « 3.2 » en anglais). */
+fun formatKg(kg: Double): String =
+    String.format(Locale.getDefault(), "%.1f", kg)
+
 /** Formate une valeur en « 3,2 kg CO2e » selon la langue du téléphone. */
 fun formatCo2e(kg: Double): String =
     String.format(Locale.getDefault(), "%.1f kg CO2e", kg)

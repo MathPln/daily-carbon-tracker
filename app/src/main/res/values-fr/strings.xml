@@ -1,0 +1,40 @@
+<resources>
+    <string name="app_name">Daily Carbon Tracker</string>
+
+    <!-- Navigation -->
+    <string name="tab_dashboard">Accueil</string>
+    <string name="tab_logbook">Journal</string>
+    <string name="tab_energy">Énergie</string>
+    <string name="tab_map">Carte</string>
+
+    <!-- Barre supérieure -->
+    <string name="action_high_contrast">Thème haut contraste</string>
+    <string name="action_broker_settings">Paramètres du broker MQTT</string>
+    <string name="broker_dialog_title">Broker MQTT (VM Ubuntu)</string>
+    <string name="broker_dialog_message">Adresse actuelle : %1$s:%2$d. Elle sera modifiable une fois l\'écran Énergie relié à MQTT.</string>
+    <string name="action_close">Fermer</string>
+
+    <!-- Accueil -->
+    <string name="dashboard_today_title">Budget carbone du jour</string>
+    <string name="gauge_of_budget">sur %1$s kg CO2e</string>
+    <string name="cd_budget_gauge">Budget carbone du jour : %1$s kg CO2e sur %2$s kg, soit %3$d pour cent. Statut : %4$s.</string>
+    <string name="status_within">Dans le budget</string>
+    <string name="status_warning">Proche de la limite</string>
+    <string name="status_over">Budget dépassé</string>
+    <string name="dashboard_breakdown_title">Répartition</string>
+    <string name="breakdown_value">%1$s · %2$d %%</string>
+    <string name="eco_mode_on">Mode éco : activé</string>
+    <string name="eco_mode_off">Mode éco : désactivé</string>
+    <string name="action_add_activity">Ajouter une activité</string>
+
+    <!-- Catégories -->
+    <string name="category_transport">Transport</string>
+    <string name="category_flight">Vols</string>
+    <string name="category_meal">Repas</string>
+    <string name="category_energy">Énergie</string>
+
+    <!-- Écrans provisoires -->
+    <string name="placeholder_logbook">Ajoutez ici vos trajets et vos repas. Les émissions seront calculées avec les facteurs officiels de l\'ADEME.</string>
+    <string name="placeholder_energy">Les relevés du compteur reçus via le broker MQTT et les alertes du mode éco s\'afficheront ici.</string>
+    <string name="placeholder_map">Les itinéraires OpenStreetMap et leur comparaison en CO2e par mode de transport s\'afficheront ici.</string>
+</resources>

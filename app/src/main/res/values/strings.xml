@@ -1,3 +1,40 @@
 <resources>
     <string name="app_name">Daily Carbon Tracker</string>
+
+    <!-- Navigation -->
+    <string name="tab_dashboard">Home</string>
+    <string name="tab_logbook">Logbook</string>
+    <string name="tab_energy">Energy</string>
+    <string name="tab_map">Map</string>
+
+    <!-- Top bar -->
+    <string name="action_high_contrast">High-contrast theme</string>
+    <string name="action_broker_settings">MQTT broker settings</string>
+    <string name="broker_dialog_title">MQTT broker (Ubuntu VM)</string>
+    <string name="broker_dialog_message">Current address: %1$s:%2$d. You will be able to change it once the Energy screen is connected to MQTT.</string>
+    <string name="action_close">Close</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_today_title">Today\'s carbon budget</string>
+    <string name="gauge_of_budget">of %1$s kg CO2e</string>
+    <string name="cd_budget_gauge">Today\'s carbon budget: %1$s kg CO2e out of %2$s kg, %3$d percent. Status: %4$s.</string>
+    <string name="status_within">Within budget</string>
+    <string name="status_warning">Close to the limit</string>
+    <string name="status_over">Budget exceeded</string>
+    <string name="dashboard_breakdown_title">Breakdown</string>
+    <string name="breakdown_value">%1$s · %2$d %%</string>
+    <string name="eco_mode_on">Eco mode: on</string>
+    <string name="eco_mode_off">Eco mode: off</string>
+    <string name="action_add_activity">Add an activity</string>
+
+    <!-- Categories -->
+    <string name="category_transport">Transport</string>
+    <string name="category_flight">Flights</string>
+    <string name="category_meal">Meals</string>
+    <string name="category_energy">Energy</string>
+
+    <!-- Placeholders -->
+    <string name="placeholder_logbook">Add your trips and meals here. Emissions will be computed with official ADEME factors.</string>
+    <string name="placeholder_energy">Live smart-meter readings from the MQTT broker and eco-mode alerts will appear here.</string>
+    <string name="placeholder_map">OpenStreetMap routes and their CO2e comparison by transport mode will appear here.</string>
 </resources>
