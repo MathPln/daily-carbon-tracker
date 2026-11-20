@@ -12,6 +12,7 @@ import dte.masteriot.daily_carbon_tracker.data.repository.CarbonRepository
 import dte.masteriot.daily_carbon_tracker.data.repository.FactorCatalog
 import dte.masteriot.daily_carbon_tracker.data.repository.FactorSource
 import dte.masteriot.daily_carbon_tracker.data.repository.MotionRepository
+import dte.masteriot.daily_carbon_tracker.data.repository.MqttRepository
 import dte.masteriot.daily_carbon_tracker.data.sensor.DetectedMotion
 import dte.masteriot.daily_carbon_tracker.utils.Constants
 import dte.masteriot.daily_carbon_tracker.utils.isToday
@@ -22,17 +23,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Statut du budget, toujours affiché avec icône + libellé + couleur. */
 enum class BudgetStatus { WITHIN, WARNING, OVER }
 
-/** Part d'une catégorie (Transport, Repas, Énergie) dans le total du jour. */
 data class CategoryShare(val category: ActivityCategory, val co2eKg: Double)
 
-/** État immuable affiché par le Dashboard. */
 data class DashboardUiState(
     val totalKg: Double,
     val budgetKg: Double = Constants.DAILY_CARBON_BUDGET_KG,
@@ -51,44 +49,43 @@ data class DashboardUiState(
     companion object {
         const val WARNING_THRESHOLD = 0.8f
 
-        /** Agrège les activités du jour en 3 catégories ; les vols comptent dans Transport. */
-        fun fromEntries(entries: List<ActivityEntry>, ecoModeActive: Boolean = false): DashboardUiState {
+        fun fromEntries(
+            entries: List<ActivityEntry>,
+            extraEnergyKg: Double = 0.0,
+            ecoModeActive: Boolean? = null,
+        ): DashboardUiState {
             val transport = entries
                 .filter { it.category == ActivityCategory.TRANSPORT || it.category == ActivityCategory.FLIGHT }
                 .sumOf { it.co2eKg }
             val meals = entries.filter { it.category == ActivityCategory.MEAL }.sumOf { it.co2eKg }
-            val energy = entries.filter { it.category == ActivityCategory.ENERGY }.sumOf { it.co2eKg }
+            val energy = entries.filter { it.category == ActivityCategory.ENERGY }.sumOf { it.co2eKg } + extraEnergyKg
+            val total = transport + meals + energy
+            val autoEco = ecoModeActive ?: (total >= Constants.DAILY_CARBON_BUDGET_KG * WARNING_THRESHOLD)
             return DashboardUiState(
-                totalKg = transport + meals + energy,
+                totalKg = total,
                 breakdown = listOf(
                     CategoryShare(ActivityCategory.TRANSPORT, transport),
                     CategoryShare(ActivityCategory.MEAL, meals),
                     CategoryShare(ActivityCategory.ENERGY, energy),
                 ),
-                ecoModeActive = ecoModeActive,
+                ecoModeActive = autoEco,
             )
         }
     }
 }
 
-/** État immuable affiché par l'écran Journal. */
 data class LogbookUiState(
     val todayEntries: List<ActivityEntry> = emptyList(),
     val todayTotalKg: Double = 0.0,
-    /** id de facteur → kg CO2e par unité (ADEME, ou secours si hors ligne). */
     val factorValues: Map<String, Double> = FactorCatalog.fallbackValues,
     val factorSource: FactorSource = FactorSource.LOADING,
     val suggestedMotion: DetectedMotion? = null,
 )
 
-/**
- * ViewModel du Dashboard et du Journal. Il ne fait qu'exposer en StateFlow
- * les données du CarbonRepository (source unique de vérité) et lui transmettre
- * les actions de l'utilisateur.
- */
 class CarbonViewModel(
     private val repository: CarbonRepository,
     private val motionRepository: MotionRepository? = null,
+    private val mqttRepository: MqttRepository? = null,
 ) : ViewModel() {
 
     private val dayTicker = flow {
@@ -102,9 +99,14 @@ class CarbonViewModel(
         entries.filter { isToday(it.timestampMillis, now) }
     }
 
-    val dashboardState: StateFlow<DashboardUiState> = todayEntries
-        .map { DashboardUiState.fromEntries(it) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState.fromEntries(emptyList()))
+    val dashboardState: StateFlow<DashboardUiState> = combine(
+        todayEntries,
+        mqttRepository?.todayEnergyCo2eKg ?: flowOf(0.0),
+    ) { entries, mqttEnergyKg ->
+        DashboardUiState.fromEntries(entries, extraEnergyKg = mqttEnergyKg)
+    }.onEach { state ->
+        mqttRepository?.onBudgetEvaluated(state.status, state.totalKg, state.budgetKg)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState.fromEntries(emptyList()))
 
     val logbookState: StateFlow<LogbookUiState> = combine(
         todayEntries,
@@ -147,11 +149,10 @@ class CarbonViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as CarbonApplication
-                CarbonViewModel(app.carbonRepository, app.motionRepository)
+                CarbonViewModel(app.carbonRepository, app.motionRepository, app.mqttRepository)
             }
         }
 
-        /** Données d'exemple pour les aperçus Android Studio. */
         fun sampleState() = DashboardUiState(
             totalKg = 3.5,
             breakdown = listOf(

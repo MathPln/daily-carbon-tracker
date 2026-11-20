@@ -65,6 +65,7 @@ dependencies {
     // Brique D — Cartographie OpenStreetMap
     implementation(libs.osmdroid.android)
 
+
     // Tests
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

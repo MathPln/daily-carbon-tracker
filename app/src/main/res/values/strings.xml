@@ -80,4 +80,19 @@
     <string name="meal_oily_fish">Oily fish meal</string>
     <string name="meal_vegetarian">Vegetarian meal</string>
     <string name="meal_vegan">Vegan meal</string>
+    <!-- MQTT & Energy -->
+    <string name="broker_dialog_hint">Use 127.0.0.1 on a USB phone with adb reverse, or 10.0.2.2 on an emulator.</string>
+    <string name="broker_host_label">Broker IP / Host</string>
+    <string name="broker_port_label">Port</string>
+    <string name="mqtt_connect">Connect</string>
+    <string name="mqtt_disconnect">Disconnect</string>
+    <string name="mqtt_status_connected">Connected to broker</string>
+    <string name="mqtt_status_connecting">Connecting to broker…</string>
+    <string name="mqtt_status_disconnected">Disconnected</string>
+    <string name="mqtt_publish_alert">Publish eco-mode alert</string>
+    <string name="energy_budget_summary">Current footprint: %1$s / %2$s (eco mode triggers at 80%%)</string>
+    <string name="energy_readings_title">Smart-meter readings (home/energy)</string>
+    <string name="energy_readings_empty">No readings received yet. Publish a JSON payload on home/energy from the Ubuntu VM.</string>
+    <string name="energy_reading_values">Electricity: %1$s kWh · Gas: %2$s m³</string>
+    <string name="mqtt_alerts_sent_title">Published alerts (carbon/alerts)</string>
 </resources>

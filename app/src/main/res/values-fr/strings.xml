@@ -80,4 +80,19 @@
     <string name="meal_oily_fish">Repas avec du poisson gras</string>
     <string name="meal_vegetarian">Repas végétarien</string>
     <string name="meal_vegan">Repas végétalien</string>
+    <!-- MQTT & Énergie -->
+    <string name="broker_dialog_hint">Utilisez 127.0.0.1 sur téléphone USB (avec adb reverse) ou 10.0.2.2 sur émulateur.</string>
+    <string name="broker_host_label">Adresse IP / Hôte du broker</string>
+    <string name="broker_port_label">Port</string>
+    <string name="mqtt_connect">Connecter</string>
+    <string name="mqtt_disconnect">Déconnecter</string>
+    <string name="mqtt_status_connected">Connecté au broker</string>
+    <string name="mqtt_status_connecting">Connexion au broker…</string>
+    <string name="mqtt_status_disconnected">Déconnecté</string>
+    <string name="mqtt_publish_alert">Publier une alerte mode éco</string>
+    <string name="energy_budget_summary">Empreinte actuelle : %1$s / %2$s (mode éco à 80 %%)</string>
+    <string name="energy_readings_title">Relevés du compteur (home/energy)</string>
+    <string name="energy_readings_empty">Aucun relevé reçu. Publiez un message JSON sur home/energy depuis la VM Ubuntu.</string>
+    <string name="energy_reading_values">Électricité : %1$s kWh · Gaz : %2$s m³</string>
+    <string name="mqtt_alerts_sent_title">Alertes publiées (carbon/alerts)</string>
 </resources>
