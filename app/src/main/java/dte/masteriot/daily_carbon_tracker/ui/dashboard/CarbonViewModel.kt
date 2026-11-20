@@ -11,6 +11,8 @@ import dte.masteriot.daily_carbon_tracker.data.model.ActivityEntry
 import dte.masteriot.daily_carbon_tracker.data.repository.CarbonRepository
 import dte.masteriot.daily_carbon_tracker.data.repository.FactorCatalog
 import dte.masteriot.daily_carbon_tracker.data.repository.FactorSource
+import dte.masteriot.daily_carbon_tracker.data.repository.MotionRepository
+import dte.masteriot.daily_carbon_tracker.data.sensor.DetectedMotion
 import dte.masteriot.daily_carbon_tracker.utils.Constants
 import dte.masteriot.daily_carbon_tracker.utils.isToday
 import dte.masteriot.daily_carbon_tracker.utils.millisUntilNextMidnight
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -75,6 +78,7 @@ data class LogbookUiState(
     /** id de facteur → kg CO2e par unité (ADEME, ou secours si hors ligne). */
     val factorValues: Map<String, Double> = FactorCatalog.fallbackValues,
     val factorSource: FactorSource = FactorSource.LOADING,
+    val suggestedMotion: DetectedMotion? = null,
 )
 
 /**
@@ -82,14 +86,11 @@ data class LogbookUiState(
  * les données du CarbonRepository (source unique de vérité) et lui transmettre
  * les actions de l'utilisateur.
  */
-class CarbonViewModel(private val repository: CarbonRepository) : ViewModel() {
+class CarbonViewModel(
+    private val repository: CarbonRepository,
+    private val motionRepository: MotionRepository? = null,
+) : ViewModel() {
 
-    /**
-     * Émet l'heure actuelle tout de suite, puis juste après chaque minuit :
-     * le total du jour repart à zéro à minuit même si l'app reste ouverte.
-     * (Quand l'écran n'est plus affiché, le flux s'arrête ; il réémet l'heure
-     * actuelle dès que l'écran revient.)
-     */
     private val dayTicker = flow {
         while (true) {
             emit(System.currentTimeMillis())
@@ -109,12 +110,14 @@ class CarbonViewModel(private val repository: CarbonRepository) : ViewModel() {
         todayEntries,
         repository.factorValues,
         repository.factorSource,
-    ) { entries, values, source ->
+        motionRepository?.suggestedMotion ?: flowOf(null),
+    ) { entries, values, source, motion ->
         LogbookUiState(
             todayEntries = entries,
             todayTotalKg = entries.sumOf { it.co2eKg },
             factorValues = values,
             factorSource = source,
+            suggestedMotion = motion,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LogbookUiState())
 
@@ -134,14 +137,17 @@ class CarbonViewModel(private val repository: CarbonRepository) : ViewModel() {
         viewModelScope.launch { repository.refreshFactors() }
     }
 
+    fun dismissMotionSuggestion() {
+        motionRepository?.clearSuggestion()
+    }
+
     companion object {
-        /** Petite marge pour être sûr d'être passé au jour suivant. */
         private const val MIDNIGHT_MARGIN_MS = 1_000L
 
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as CarbonApplication
-                CarbonViewModel(app.carbonRepository)
+                CarbonViewModel(app.carbonRepository, app.motionRepository)
             }
         }
 

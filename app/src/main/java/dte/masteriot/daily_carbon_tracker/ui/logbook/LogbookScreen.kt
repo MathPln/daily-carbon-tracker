@@ -17,11 +17,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -38,6 +41,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -64,6 +68,7 @@ import dte.masteriot.daily_carbon_tracker.data.model.ActivityEntry
 import dte.masteriot.daily_carbon_tracker.data.model.QuantityUnit
 import dte.masteriot.daily_carbon_tracker.data.repository.FactorCatalog
 import dte.masteriot.daily_carbon_tracker.data.repository.FactorSource
+import dte.masteriot.daily_carbon_tracker.data.sensor.DetectedMotion
 import dte.masteriot.daily_carbon_tracker.ui.common.AppCard
 import dte.masteriot.daily_carbon_tracker.ui.common.icon
 import dte.masteriot.daily_carbon_tracker.ui.common.labelRes
@@ -88,6 +93,7 @@ fun LogbookScreen(
         onAddActivity = viewModel::addActivity,
         onDeleteActivity = viewModel::removeActivity,
         onRetryFactors = viewModel::retryFactors,
+        onDismissSuggestion = viewModel::dismissMotionSuggestion,
         modifier = modifier,
     )
 }
@@ -98,8 +104,11 @@ fun LogbookContent(
     onAddActivity: (factorId: String, quantity: Double) -> Unit,
     onDeleteActivity: (id: Long) -> Unit,
     onRetryFactors: () -> Unit,
+    onDismissSuggestion: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var suggestedFactorId by rememberSaveable { mutableStateOf<String?>(null) }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -108,8 +117,27 @@ fun LogbookContent(
         item(key = "source") {
             FactorSourceBanner(source = state.factorSource, onRetry = onRetryFactors)
         }
+        state.suggestedMotion?.let { motion ->
+            if (motion != DetectedMotion.STATIC && motion.factorId != null) {
+                item(key = "motion_suggestion") {
+                    MotionSuggestionBanner(
+                        motion = motion,
+                        onAccept = {
+                            suggestedFactorId = motion.factorId
+                            onDismissSuggestion()
+                        },
+                        onDismiss = onDismissSuggestion,
+                    )
+                }
+            }
+        }
         item(key = "form") {
-            NewActivityCard(factorValues = state.factorValues, onAddActivity = onAddActivity)
+            NewActivityCard(
+                factorValues = state.factorValues,
+                suggestedFactorId = suggestedFactorId,
+                onSuggestionConsumed = { suggestedFactorId = null },
+                onAddActivity = onAddActivity,
+            )
         }
         item(key = "header") {
             Row(
@@ -187,6 +215,63 @@ private fun FactorSourceBanner(source: FactorSource, onRetry: () -> Unit) {
 }
 
 // ---------------------------------------------------------------------------
+// Bannière d'autosuggestion par accéléromètre (Étape 4)
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun MotionSuggestionBanner(
+    motion: DetectedMotion,
+    onAccept: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val motionText = if (motion == DetectedMotion.VEHICLE) "Vehicle" else "Walking"
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics(mergeDescendants = true) {},
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = if (motion == DetectedMotion.VEHICLE) {
+                        Icons.Filled.DirectionsCar
+                    } else {
+                        Icons.AutoMirrored.Filled.DirectionsWalk
+                    },
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Detected: $motionText",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Button(
+                onClick = onAccept,
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
+                Text("Add?")
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "Dismiss transport suggestion",
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Formulaire d'ajout
 // ---------------------------------------------------------------------------
 
@@ -194,18 +279,28 @@ private fun FactorSourceBanner(source: FactorSource, onRetry: () -> Unit) {
 @Composable
 private fun NewActivityCard(
     factorValues: Map<String, Double>,
+    suggestedFactorId: String?,
+    onSuggestionConsumed: () -> Unit,
     onAddActivity: (factorId: String, quantity: Double) -> Unit,
 ) {
-    // rememberSaveable : le formulaire survit aux rotations d'écran
     var category by rememberSaveable { mutableStateOf(ActivityCategory.TRANSPORT) }
     var factorId by rememberSaveable { mutableStateOf(FactorCatalog.transportSpecs.first().id) }
     var quantityText by rememberSaveable { mutableStateOf("") }
+
+    LaunchedEffect(suggestedFactorId) {
+        if (suggestedFactorId != null) {
+            category = ActivityCategory.TRANSPORT
+            factorId = suggestedFactorId
+            quantityText = ""
+            onSuggestionConsumed()
+        }
+    }
 
     val spec = FactorCatalog.spec(factorId) ?: FactorCatalog.transportSpecs.first()
     val isKm = spec.unit == QuantityUnit.KM
     val quantity = quantityText.replace(',', '.').toDoubleOrNull()
     val isValid = quantity != null && quantity > 0 &&
-        quantity <= (if (isKm) Constants.MAX_DISTANCE_KM else Constants.MAX_MEALS_PER_ENTRY.toDouble())
+            quantity <= (if (isKm) Constants.MAX_DISTANCE_KM else Constants.MAX_MEALS_PER_ENTRY.toDouble())
     val estimateKg = if (quantity != null && isValid) FactorCatalog.co2eFor(spec.id, quantity, factorValues) else 0.0
 
     AppCard(modifier = Modifier.fillMaxWidth()) {
@@ -219,7 +314,6 @@ private fun NewActivityCard(
                 modifier = Modifier.semantics { heading() },
             )
 
-            // 1. Catégorie : Transport / Vol / Repas
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 val categories = FactorCatalog.journalCategories
                 categories.forEachIndexed { index, item ->
@@ -238,7 +332,6 @@ private fun NewActivityCard(
                 }
             }
 
-            // 2. Type précis (voiture, bus, repas végétarien…) — pas de choix pour l'avion
             if (category != ActivityCategory.FLIGHT) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FactorCatalog.specsFor(category).forEach { option ->
@@ -277,7 +370,6 @@ private fun NewActivityCard(
                 )
             }
 
-            // 3. Quantité : distance en km ou nombre de repas
             val showError = quantityText.isNotEmpty() && !isValid
             OutlinedTextField(
                 value = quantityText,
@@ -308,7 +400,6 @@ private fun NewActivityCard(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            // 4. Impact calculé en direct (annoncé par TalkBack quand il change)
             Text(
                 text = stringResource(R.string.logbook_estimate, formatCo2e(estimateKg)),
                 style = MaterialTheme.typography.titleMedium,
@@ -407,6 +498,7 @@ private fun LogbookPreview() {
             onAddActivity = { _, _ -> },
             onDeleteActivity = {},
             onRetryFactors = {},
+            onDismissSuggestion = {},
         )
     }
 }
