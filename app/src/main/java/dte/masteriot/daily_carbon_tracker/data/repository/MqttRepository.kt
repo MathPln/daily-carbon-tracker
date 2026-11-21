@@ -154,28 +154,27 @@ class MqttRepository(context: Context) {
         }
         if (status != lastAlertedStatus) {
             lastAlertedStatus = status
-            publishBudgetAlert(status, totalKg, budgetKg)
+            publishBudgetAlert(status, totalKg, budgetKg, trigger = "threshold")
         }
     }
 
-    fun publishBudgetAlert(status: BudgetStatus, totalKg: Double, budgetKg: Double) {
+    fun publishBudgetAlert(
+        status: BudgetStatus,
+        totalKg: Double,
+        budgetKg: Double,
+        trigger: String = "manual",
+    ) {
         scope.launch {
             val activeClient = client ?: return@launch
             if (_status.value != MqttStatus.CONNECTED) return@launch
 
+            val roundedKg = String.format(Locale.US, "%.2f", totalKg).toDouble()
             val payload = JSONObject().apply {
-                put("status", status.name)
                 put("eco_mode", true)
-                put("total_co2e_kg", String.format(Locale.US, "%.2f", totalKg).toDouble())
+                put("trigger", trigger)
+                put("co2_kg", roundedKg)
+                put("status", status.name)
                 put("budget_kg", budgetKg)
-                put(
-                    "message",
-                    if (status == BudgetStatus.OVER) {
-                        "Daily carbon budget exceeded (${String.format(Locale.US, "%.2f", totalKg)} / $budgetKg kg CO2e)"
-                    } else {
-                        "Eco mode activated: 80% of daily carbon budget reached"
-                    }
-                )
             }.toString()
 
             try {
