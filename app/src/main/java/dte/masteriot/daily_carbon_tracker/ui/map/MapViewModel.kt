@@ -58,6 +58,12 @@ class MapViewModel(
         startPoint.value = point
     }
 
+    // Apply start and/or end points resolved from address or coordinate inputs
+    fun setRoutePoints(start: GeoPoint?, end: GeoPoint?) {
+        start?.let { startPoint.value = it }
+        end?.let { endPoint.value = it }
+    }
+
     fun selectMode(mode: TransportMode) {
         selectedMode.value = mode
     }

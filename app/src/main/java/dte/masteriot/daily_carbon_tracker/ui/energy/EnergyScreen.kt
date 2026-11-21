@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -73,23 +74,22 @@ fun EnergyScreen(
         item {
             AppCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val (statusIcon, statusText, statusColor) = when (status) {
-                            MqttStatus.CONNECTED -> Triple(
-                                Icons.Filled.CloudDone,
-                                stringResource(R.string.mqtt_status_connected),
-                                MaterialTheme.colorScheme.primary,
-                            )
-                            MqttStatus.CONNECTING -> Triple(
-                                Icons.Filled.Sync,
-                                stringResource(R.string.mqtt_status_connecting),
-                                MaterialTheme.colorScheme.tertiary,
-                            )
-                            MqttStatus.DISCONNECTED -> Triple(
-                                Icons.Filled.CloudOff,
-                                stringResource(R.string.mqtt_status_disconnected),
-                                MaterialTheme.colorScheme.error,
-                            )
+                    val statusText = when (status) {
+                        MqttStatus.CONNECTED -> stringResource(R.string.mqtt_status_connected)
+                        MqttStatus.CONNECTING -> stringResource(R.string.mqtt_status_connecting)
+                        MqttStatus.DISCONNECTED -> stringResource(R.string.mqtt_status_disconnected)
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.semantics(mergeDescendants = true) {
+                            contentDescription = "MQTT server: $statusText"
+                        },
+                    ) {
+                        val (statusIcon, statusColor) = when (status) {
+                            MqttStatus.CONNECTED -> Icons.Filled.CloudDone to MaterialTheme.colorScheme.primary
+                            MqttStatus.CONNECTING -> Icons.Filled.Sync to MaterialTheme.colorScheme.tertiary
+                            MqttStatus.DISCONNECTED -> Icons.Filled.CloudOff to MaterialTheme.colorScheme.error
                         }
                         Icon(
                             imageVector = statusIcon,

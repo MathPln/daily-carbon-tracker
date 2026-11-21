@@ -3,6 +3,7 @@ package dte.masteriot.daily_carbon_tracker.ui.navigation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -117,7 +118,7 @@ fun CarbonApp(
         NavHost(
             navController = navController,
             startDestination = TopLevelDestination.DASHBOARD.route,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.padding(innerPadding).imePadding(),
         ) {
             composable(TopLevelDestination.DASHBOARD.route) {
                 DashboardScreen(onAddActivity = { navigateTo(TopLevelDestination.LOGBOOK) })

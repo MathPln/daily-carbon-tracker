@@ -261,7 +261,10 @@ private fun MotionSuggestionBanner(
             ) {
                 Text("Add?")
             }
-            IconButton(onClick = onDismiss) {
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.heightIn(min = 48.dp),
+            ) {
                 Icon(
                     imageVector = Icons.Filled.Close,
                     contentDescription = "Dismiss transport suggestion",
@@ -453,7 +456,10 @@ private fun EntryRow(entry: ActivityEntry, onDelete: (Long) -> Unit) {
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    IconButton(onClick = { onDelete(entry.id) }) {
+                    IconButton(
+                        onClick = { onDelete(entry.id) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
                             contentDescription = stringResource(R.string.logbook_delete, label),

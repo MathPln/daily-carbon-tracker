@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
+import android.location.Geocoder
 import android.location.LocationManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -24,13 +25,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +52,9 @@ import dte.masteriot.daily_carbon_tracker.R
 import dte.masteriot.daily_carbon_tracker.data.model.TransportMode
 import dte.masteriot.daily_carbon_tracker.utils.formatCo2e
 import dte.masteriot.daily_carbon_tracker.utils.formatNumber
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -57,6 +62,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
+import java.util.Locale
 
 @Composable
 fun MapRouteScreen(
@@ -66,17 +72,20 @@ fun MapRouteScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     var locationTrigger by remember { mutableStateOf(0) }
     var lastHandledTrigger by remember { mutableStateOf(0) }
     var userMarkerPoint by remember { mutableStateOf<GeoPoint?>(null) }
+    var startInput by remember { mutableStateOf("Calle de Nikola Tesla, Madrid") }
+    var endInput by remember { mutableStateOf("Puerta del Sol, Madrid") }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
         val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+                grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         if (granted) {
             locationTrigger++
         } else {
@@ -131,6 +140,7 @@ fun MapRouteScreen(
                         if (loc != null) {
                             val pt = GeoPoint(loc.latitude, loc.longitude)
                             userMarkerPoint = pt
+                            startInput = "${formatCoord(pt.latitude)}, ${formatCoord(pt.longitude)}"
                             view.controller.animateTo(pt)
                             viewModel.setStartPoint(pt)
                         } else {
@@ -179,7 +189,8 @@ fun MapRouteScreen(
                     view.invalidate()
                 },
             )
-            OutlinedButton(
+            // Filled button keeps high contrast over light map tiles
+            Button(
                 onClick = requestLocation,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -199,7 +210,40 @@ fun MapRouteScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Tap map for start & destination", style = MaterialTheme.typography.titleMedium)
+            Text("Start & destination (address, lat,lon or map)", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = startInput,
+                onValueChange = { startInput = it },
+                label = { Text("Start address or coordinates") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = endInput,
+                onValueChange = { endInput = it },
+                label = { Text("Destination address or coordinates") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = {
+                    scope.launch {
+                        val startGeo = withContext(Dispatchers.IO) { resolveAddressOrCoords(context, startInput) }
+                        val endGeo = withContext(Dispatchers.IO) { resolveAddressOrCoords(context, endInput) }
+                        if (startGeo == null && endGeo == null) {
+                            Toast.makeText(context, "Address or coordinates not found", Toast.LENGTH_SHORT).show()
+                        } else {
+                            viewModel.setRoutePoints(startGeo, endGeo)
+                            (startGeo ?: endGeo)?.let { mapView.controller.animateTo(it) }
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+            ) {
+                Text("Update route")
+            }
             state.routeOptions.forEach { option ->
                 val label = when (option.mode) {
                     TransportMode.WALK -> stringResource(R.string.factor_walk)
@@ -245,6 +289,30 @@ fun MapRouteScreen(
         }
     }
 }
+
+private fun resolveAddressOrCoords(context: Context, input: String): GeoPoint? {
+    val trimmed = input.trim()
+    if (trimmed.isEmpty()) return null
+    val parts = trimmed.split(",")
+    if (parts.size == 2) {
+        val lat = parts[0].trim().toDoubleOrNull()
+        val lon = parts[1].trim().toDoubleOrNull()
+        if (lat != null && lon != null && lat in -90.0..90.0 && lon in -180.0..180.0) {
+            return GeoPoint(lat, lon)
+        }
+    }
+    return try {
+        if (!Geocoder.isPresent()) return null
+        @Suppress("DEPRECATION")
+        val matches = Geocoder(context, Locale.getDefault()).getFromLocationName(trimmed, 1)
+        val match = matches?.firstOrNull()
+        if (match != null) GeoPoint(match.latitude, match.longitude) else null
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun formatCoord(value: Double): String = String.format(Locale.US, "%.4f", value)
 
 private fun getLastLocation(context: Context) = try {
     val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
