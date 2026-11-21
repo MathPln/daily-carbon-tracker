@@ -1,7 +1,10 @@
 package dte.masteriot.daily_carbon_tracker.data.repository
 
+import android.content.Context
 import android.util.Log
+import dte.masteriot.daily_carbon_tracker.data.model.ActivityCategory
 import dte.masteriot.daily_carbon_tracker.data.model.ActivityEntry
+import dte.masteriot.daily_carbon_tracker.data.model.QuantityUnit
 import dte.masteriot.daily_carbon_tracker.data.remote.ImpactCo2Api
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -13,6 +16,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicLong
 
 /** Origine des facteurs d'émission actuellement utilisés. */
@@ -22,12 +27,14 @@ enum class FactorSource { LOADING, ADEME_API, OFFLINE_FALLBACK }
  * Source unique de vérité du Journal carbone :
  * - met en cache en mémoire les facteurs ADEME récupérés via l'API Impact CO2,
  *   avec un jeu de secours intégré si le réseau est coupé ;
- * - conserve les activités saisies et calcule leurs émissions.
- *
- * Une seule instance pour toute l'application (voir CarbonApplication) :
- * l'écran Journal et le Dashboard lisent donc les mêmes données.
+ * - persiste les activités saisies en local pour les conserver après fermeture de l'app.
  */
-class CarbonRepository(private val api: ImpactCo2Api) {
+class CarbonRepository(
+    private val api: ImpactCo2Api,
+    context: Context,
+) {
+
+    private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _factorValues = MutableStateFlow(FactorCatalog.fallbackValues)
     /** id de facteur → kg CO2e par unité. */
@@ -36,12 +43,13 @@ class CarbonRepository(private val api: ImpactCo2Api) {
     private val _factorSource = MutableStateFlow(FactorSource.LOADING)
     val factorSource: StateFlow<FactorSource> = _factorSource.asStateFlow()
 
-    private val _entries = MutableStateFlow<List<ActivityEntry>>(emptyList())
+    private val initialEntries = loadPersistedEntries()
+    private val _entries = MutableStateFlow(initialEntries)
     /** Toutes les activités, la plus récente en premier. */
     val entries: StateFlow<List<ActivityEntry>> = _entries.asStateFlow()
 
     private val refreshMutex = Mutex()
-    private val nextId = AtomicLong(1)
+    private val nextId = AtomicLong((initialEntries.maxOfOrNull { it.id } ?: 0L) + 1L)
 
     /** Charge les facteurs une seule fois (appelé par chaque ViewModel au démarrage). */
     suspend fun ensureFactorsLoaded() {
@@ -100,7 +108,7 @@ class CarbonRepository(private val api: ImpactCo2Api) {
         values
     }
 
-    /** Ajoute une activité au Journal et renvoie l'entrée créée avec ses émissions calculées. */
+    /** Ajoute une activité au Journal, la sauvegarde et renvoie l'entrée créée. */
     fun addActivity(factorId: String, quantity: Double): ActivityEntry? {
         val spec = FactorCatalog.spec(factorId) ?: return null
         val entry = ActivityEntry(
@@ -113,15 +121,79 @@ class CarbonRepository(private val api: ImpactCo2Api) {
             co2eKg = FactorCatalog.co2eFor(spec.id, quantity, _factorValues.value),
             timestampMillis = System.currentTimeMillis(),
         )
-        _entries.update { listOf(entry) + it }
+        _entries.update { current ->
+            val updated = listOf(entry) + current
+            persistEntries(updated)
+            updated
+        }
         return entry
     }
 
     fun removeActivity(id: Long) {
-        _entries.update { entries -> entries.filterNot { it.id == id } }
+        _entries.update { current ->
+            val updated = current.filterNot { it.id == id }
+            persistEntries(updated)
+            updated
+        }
+    }
+
+    private fun persistEntries(list: List<ActivityEntry>) {
+        val array = JSONArray()
+        list.forEach { entry ->
+            array.put(
+                JSONObject().apply {
+                    put("id", entry.id)
+                    put("category", entry.category.name)
+                    put("factorId", entry.factorId)
+                    put("quantity", entry.quantity)
+                    put("unit", entry.unit.name)
+                    put("co2eKg", entry.co2eKg)
+                    put("timestampMillis", entry.timestampMillis)
+                }
+            )
+        }
+        prefs.edit().putString(KEY_ENTRIES_JSON, array.toString()).apply()
+    }
+
+    private fun loadPersistedEntries(): List<ActivityEntry> {
+        val raw = prefs.getString(KEY_ENTRIES_JSON, null) ?: return emptyList()
+        return try {
+            val array = JSONArray(raw)
+            buildList {
+                for (i in 0 until array.length()) {
+                    val obj = array.optJSONObject(i) ?: continue
+                    val factorId = obj.optString("factorId", "")
+                    val spec = FactorCatalog.spec(factorId)
+                    val category = runCatching {
+                        ActivityCategory.valueOf(obj.optString("category", ""))
+                    }.getOrElse { spec?.category ?: ActivityCategory.TRANSPORT }
+                    val unit = runCatching {
+                        QuantityUnit.valueOf(obj.optString("unit", ""))
+                    }.getOrElse { spec?.unit ?: QuantityUnit.KM }
+                    val labelRes = spec?.labelRes ?: FactorCatalog.transportSpecs.first().labelRes
+                    add(
+                        ActivityEntry(
+                            id = obj.optLong("id", i.toLong() + 1L),
+                            category = category,
+                            factorId = factorId,
+                            labelRes = labelRes,
+                            quantity = obj.optDouble("quantity", 0.0),
+                            unit = unit,
+                            co2eKg = obj.optDouble("co2eKg", 0.0),
+                            timestampMillis = obj.optLong("timestampMillis", 0L),
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to restore persisted logbook entries", e)
+            emptyList()
+        }
     }
 
     private companion object {
         const val TAG = "CarbonRepository"
+        const val PREFS_NAME = "carbon_logbook_prefs"
+        const val KEY_ENTRIES_JSON = "entries_json"
     }
 }
