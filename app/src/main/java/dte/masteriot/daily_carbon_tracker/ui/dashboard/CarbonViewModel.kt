@@ -17,6 +17,7 @@ import dte.masteriot.daily_carbon_tracker.data.sensor.DetectedMotion
 import dte.masteriot.daily_carbon_tracker.utils.Constants
 import dte.masteriot.daily_carbon_tracker.utils.isToday
 import dte.masteriot.daily_carbon_tracker.utils.millisUntilNextMidnight
+import java.util.Calendar
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -36,13 +37,25 @@ data class DashboardUiState(
     val budgetKg: Double = Constants.DAILY_CARBON_BUDGET_KG,
     val breakdown: List<CategoryShare>,
     val ecoModeActive: Boolean,
+    val yearUsedKg: Double = 0.0,
+    val annualBudgetKg: Double = Constants.DAILY_CARBON_BUDGET_KG * 365,
+    val predictedAnnualKg: Double = 0.0,
 ) {
     val progress: Float get() = if (budgetKg > 0) (totalKg / budgetKg).toFloat() else 0f
+    val yearProgress: Float get() = if (annualBudgetKg > 0) (yearUsedKg / annualBudgetKg).toFloat() else 0f
+    val predictedYearProgress: Float get() = if (annualBudgetKg > 0) (predictedAnnualKg / annualBudgetKg).toFloat() else 0f
 
     val status: BudgetStatus
         get() = when {
             progress > 1f -> BudgetStatus.OVER
             progress >= WARNING_THRESHOLD -> BudgetStatus.WARNING
+            else -> BudgetStatus.WITHIN
+        }
+
+    val yearStatus: BudgetStatus
+        get() = when {
+            predictedYearProgress > 1f -> BudgetStatus.OVER
+            predictedYearProgress >= WARNING_THRESHOLD -> BudgetStatus.WARNING
             else -> BudgetStatus.WITHIN
         }
 
@@ -53,14 +66,33 @@ data class DashboardUiState(
             entries: List<ActivityEntry>,
             extraEnergyKg: Double = 0.0,
             ecoModeActive: Boolean? = null,
+            nowMillis: Long = System.currentTimeMillis(),
         ): DashboardUiState {
-            val transport = entries
+            val todayEntries = entries.filter { isToday(it.timestampMillis, nowMillis) }
+            val transport = todayEntries
                 .filter { it.category == ActivityCategory.TRANSPORT || it.category == ActivityCategory.FLIGHT }
                 .sumOf { it.co2eKg }
-            val meals = entries.filter { it.category == ActivityCategory.MEAL }.sumOf { it.co2eKg }
-            val energy = entries.filter { it.category == ActivityCategory.ENERGY }.sumOf { it.co2eKg } + extraEnergyKg
+            val meals = todayEntries.filter { it.category == ActivityCategory.MEAL }.sumOf { it.co2eKg }
+            val energy = todayEntries.filter { it.category == ActivityCategory.ENERGY }.sumOf { it.co2eKg } + extraEnergyKg
             val total = transport + meals + energy
             val autoEco = ecoModeActive ?: (total >= Constants.DAILY_CARBON_BUDGET_KG * WARNING_THRESHOLD)
+
+            // Annual budget, used emissions so far this year, and linear projection from elapsed days
+            val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
+            val currentYear = cal.get(Calendar.YEAR)
+            val elapsedDays = cal.get(Calendar.DAY_OF_YEAR).coerceAtLeast(1)
+            val daysInYear = cal.getActualMaximum(Calendar.DAY_OF_YEAR).coerceAtLeast(365)
+
+            val entryCal = Calendar.getInstance()
+            val yearUsed = entries.filter { entry ->
+                entryCal.timeInMillis = entry.timestampMillis
+                entryCal.get(Calendar.YEAR) == currentYear
+            }.sumOf { it.co2eKg }
+
+            val annualBudget = Constants.DAILY_CARBON_BUDGET_KG * daysInYear
+            val dailyAverage = yearUsed / elapsedDays
+            val predictedAnnual = dailyAverage * daysInYear
+
             return DashboardUiState(
                 totalKg = total,
                 breakdown = listOf(
@@ -69,6 +101,9 @@ data class DashboardUiState(
                     CategoryShare(ActivityCategory.ENERGY, energy),
                 ),
                 ecoModeActive = autoEco,
+                yearUsedKg = yearUsed,
+                annualBudgetKg = annualBudget,
+                predictedAnnualKg = predictedAnnual,
             )
         }
     }
@@ -100,10 +135,15 @@ class CarbonViewModel(
     }
 
     val dashboardState: StateFlow<DashboardUiState> = combine(
-        todayEntries,
+        repository.entries,
+        dayTicker,
         mqttRepository?.todayEnergyCo2eKg ?: flowOf(0.0),
-    ) { entries, mqttEnergyKg ->
-        DashboardUiState.fromEntries(entries, extraEnergyKg = mqttEnergyKg)
+    ) { allEntries, now, mqttEnergyKg ->
+        DashboardUiState.fromEntries(
+            entries = allEntries,
+            extraEnergyKg = mqttEnergyKg,
+            nowMillis = now,
+        )
     }.onEach { state ->
         mqttRepository?.onBudgetEvaluated(state.status, state.totalKg, state.budgetKg)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState.fromEntries(emptyList()))
@@ -161,6 +201,9 @@ class CarbonViewModel(
                 CategoryShare(ActivityCategory.ENERGY, 0.6),
             ),
             ecoModeActive = false,
+            yearUsedKg = 420.0,
+            annualBudgetKg = 2007.5,
+            predictedAnnualKg = 472.5,
         )
     }
 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -109,6 +110,7 @@ fun DashboardContent(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                AnnualBudgetCard(state)
                 BreakdownCard(state)
                 EcoModeCard(state.ecoModeActive)
                 AddActivityButton(onAddActivity)
@@ -123,6 +125,7 @@ fun DashboardContent(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             BudgetGaugeCard(state = state, fillHeight = false, modifier = Modifier.fillMaxWidth())
+            AnnualBudgetCard(state)
             BreakdownCard(state)
             EcoModeCard(state.ecoModeActive)
             AddActivityButton(onAddActivity)
@@ -131,7 +134,7 @@ fun DashboardContent(
 }
 
 // ---------------------------------------------------------------------------
-// Jauge du budget
+// Jauge du budget quotidien & annuel
 // ---------------------------------------------------------------------------
 
 private data class StatusVisual(
@@ -147,6 +150,48 @@ private fun BudgetStatus.visual(): StatusVisual {
         BudgetStatus.WITHIN -> StatusVisual(R.string.status_within, Icons.Filled.CheckCircle, colors.ok)
         BudgetStatus.WARNING -> StatusVisual(R.string.status_warning, Icons.Filled.Warning, colors.warning)
         BudgetStatus.OVER -> StatusVisual(R.string.status_over, Icons.Filled.Error, colors.over)
+    }
+}
+
+@Composable
+private fun AnnualBudgetCard(state: DashboardUiState) {
+    val yearVisual = state.yearStatus.visual()
+    val usedPct = (state.yearProgress * 100).roundToInt()
+    val predictedPct = (state.predictedYearProgress * 100).roundToInt()
+
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .semantics(mergeDescendants = true) {},
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = "Annual budget",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = "Used: ${formatKg(state.yearUsedKg)} / ${formatKg(state.annualBudgetKg)} kg ($usedPct%)",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            // Horizontal gauge showing current annual usage against annual budget
+            LinearProgressIndicator(
+                progress = { state.yearProgress.coerceIn(0f, 1f) },
+                color = yearVisual.color,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(10.dp),
+            )
+            Text(
+                text = "Predicted end of year: ${formatKg(state.predictedAnnualKg)} kg ($predictedPct% at current pace)",
+                style = MaterialTheme.typography.bodyMedium,
+                color = yearVisual.color,
+                fontWeight = FontWeight.Medium,
+            )
+        }
     }
 }
 
