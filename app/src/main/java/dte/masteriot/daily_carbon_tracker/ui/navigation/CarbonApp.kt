@@ -2,18 +2,24 @@ package dte.masteriot.daily_carbon_tracker.ui.navigation
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Contrast
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
@@ -45,6 +51,9 @@ import dte.masteriot.daily_carbon_tracker.ui.dashboard.DashboardScreen
 import dte.masteriot.daily_carbon_tracker.ui.energy.EnergyScreen
 import dte.masteriot.daily_carbon_tracker.ui.logbook.LogbookScreen
 import dte.masteriot.daily_carbon_tracker.ui.map.MapRouteScreen
+import dte.masteriot.daily_carbon_tracker.utils.formatKg
+import java.util.Calendar
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,13 +64,15 @@ fun CarbonApp(
     val app = LocalContext.current.applicationContext as CarbonApplication
     val mqtt = app.mqttRepository
     val brokerConfig by mqtt.brokerConfig.collectAsStateWithLifecycle()
+    val fontScale by app.fontScale.collectAsStateWithLifecycle()
+    val annualBudgetKg by app.annualBudgetKg.collectAsStateWithLifecycle()
 
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = TopLevelDestination.entries
         .firstOrNull { it.route == backStackEntry?.destination?.route }
         ?: TopLevelDestination.DASHBOARD
-    var showBrokerDialog by rememberSaveable { mutableStateOf(false) }
+    var showSettingsDialog by rememberSaveable { mutableStateOf(false) }
 
     val navigateTo: (TopLevelDestination) -> Unit = { destination ->
         navController.navigate(destination.route) {
@@ -87,7 +98,7 @@ fun CarbonApp(
                             contentDescription = stringResource(R.string.action_high_contrast),
                         )
                     }
-                    IconButton(onClick = { showBrokerDialog = true }) {
+                    IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(
                             imageVector = Icons.Filled.Settings,
                             contentDescription = stringResource(R.string.action_broker_settings),
@@ -129,16 +140,68 @@ fun CarbonApp(
         }
     }
 
-    if (showBrokerDialog) {
+    if (showSettingsDialog) {
         var hostInput by rememberSaveable(brokerConfig.host) { mutableStateOf(brokerConfig.host) }
         var portInput by rememberSaveable(brokerConfig.port) { mutableStateOf(brokerConfig.port.toString()) }
+        var selectedScale by rememberSaveable(fontScale) { mutableStateOf(fontScale) }
+        var annualBudgetInput by rememberSaveable(annualBudgetKg) {
+            mutableStateOf(formatKg(annualBudgetKg).replace(',', '.'))
+        }
+
+        val scaleOptions = listOf(
+            "Small" to 0.9f,
+            "Normal" to 1.0f,
+            "Large" to 1.2f,
+        )
+        val daysInYear = Calendar.getInstance().getActualMaximum(Calendar.DAY_OF_YEAR).coerceAtLeast(365)
+        val parsedAnnual = annualBudgetInput.replace(',', '.').toDoubleOrNull()
+        val previewDaily = if (parsedAnnual != null && parsedAnnual > 0.0) parsedAnnual / daysInYear else null
 
         AlertDialog(
-            onDismissRequest = { showBrokerDialog = false },
-            title = { Text(stringResource(R.string.broker_dialog_title)) },
+            onDismissRequest = { showSettingsDialog = false },
+            title = { Text("Settings") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(R.string.broker_dialog_hint))
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("Font size", style = MaterialTheme.typography.titleSmall)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        scaleOptions.forEach { (label, scaleValue) ->
+                            FilterChip(
+                                selected = abs(selectedScale - scaleValue) < 0.01f,
+                                onClick = { selectedScale = scaleValue },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+
+                    HorizontalDivider()
+
+                    Text("Annual carbon target", style = MaterialTheme.typography.titleSmall)
+                    OutlinedTextField(
+                        value = annualBudgetInput,
+                        onValueChange = { annualBudgetInput = it },
+                        label = { Text("Annual target (kg CO2e)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (previewDaily != null) {
+                        Text(
+                            text = "Daily target: ${formatKg(previewDaily)} kg CO2e/day",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    HorizontalDivider()
+
+                    Text(stringResource(R.string.broker_dialog_title), style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(R.string.broker_dialog_hint), style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(
                         value = hostInput,
                         onValueChange = { hostInput = it },
@@ -159,15 +222,17 @@ fun CarbonApp(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        val targetAnnual = parsedAnnual?.takeIf { it > 0.0 } ?: annualBudgetKg
+                        app.updatePreferences(selectedScale, targetAnnual)
                         mqtt.updateBrokerConfig(hostInput, portInput.toIntOrNull() ?: 1883, reconnectNow = true)
-                        showBrokerDialog = false
+                        showSettingsDialog = false
                     }
                 ) {
                     Text(stringResource(R.string.mqtt_connect))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showBrokerDialog = false }) {
+                TextButton(onClick = { showSettingsDialog = false }) {
                     Text(stringResource(R.string.action_close))
                 }
             },

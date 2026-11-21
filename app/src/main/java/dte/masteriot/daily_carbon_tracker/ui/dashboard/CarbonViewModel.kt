@@ -67,7 +67,18 @@ data class DashboardUiState(
             extraEnergyKg: Double = 0.0,
             ecoModeActive: Boolean? = null,
             nowMillis: Long = System.currentTimeMillis(),
+            annualBudgetKg: Double? = null,
         ): DashboardUiState {
+            val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
+            val currentYear = cal.get(Calendar.YEAR)
+            val elapsedDays = cal.get(Calendar.DAY_OF_YEAR).coerceAtLeast(1)
+            val daysInYear = cal.getActualMaximum(Calendar.DAY_OF_YEAR).coerceAtLeast(365)
+
+            // Annual target drives the daily target so both stay consistent
+            val resolvedAnnualBudget = annualBudgetKg?.takeIf { it > 0.0 }
+                ?: (Constants.DAILY_CARBON_BUDGET_KG * daysInYear)
+            val dailyBudget = resolvedAnnualBudget / daysInYear
+
             val todayEntries = entries.filter { isToday(it.timestampMillis, nowMillis) }
             val transport = todayEntries
                 .filter { it.category == ActivityCategory.TRANSPORT || it.category == ActivityCategory.FLIGHT }
@@ -75,13 +86,7 @@ data class DashboardUiState(
             val meals = todayEntries.filter { it.category == ActivityCategory.MEAL }.sumOf { it.co2eKg }
             val energy = todayEntries.filter { it.category == ActivityCategory.ENERGY }.sumOf { it.co2eKg } + extraEnergyKg
             val total = transport + meals + energy
-            val autoEco = ecoModeActive ?: (total >= Constants.DAILY_CARBON_BUDGET_KG * WARNING_THRESHOLD)
-
-            // Annual budget, used emissions so far this year, and linear projection from elapsed days
-            val cal = Calendar.getInstance().apply { timeInMillis = nowMillis }
-            val currentYear = cal.get(Calendar.YEAR)
-            val elapsedDays = cal.get(Calendar.DAY_OF_YEAR).coerceAtLeast(1)
-            val daysInYear = cal.getActualMaximum(Calendar.DAY_OF_YEAR).coerceAtLeast(365)
+            val autoEco = ecoModeActive ?: (total >= dailyBudget * WARNING_THRESHOLD)
 
             val entryCal = Calendar.getInstance()
             val yearUsed = entries.filter { entry ->
@@ -89,12 +94,12 @@ data class DashboardUiState(
                 entryCal.get(Calendar.YEAR) == currentYear
             }.sumOf { it.co2eKg }
 
-            val annualBudget = Constants.DAILY_CARBON_BUDGET_KG * daysInYear
             val dailyAverage = yearUsed / elapsedDays
             val predictedAnnual = dailyAverage * daysInYear
 
             return DashboardUiState(
                 totalKg = total,
+                budgetKg = dailyBudget,
                 breakdown = listOf(
                     CategoryShare(ActivityCategory.TRANSPORT, transport),
                     CategoryShare(ActivityCategory.MEAL, meals),
@@ -102,7 +107,7 @@ data class DashboardUiState(
                 ),
                 ecoModeActive = autoEco,
                 yearUsedKg = yearUsed,
-                annualBudgetKg = annualBudget,
+                annualBudgetKg = resolvedAnnualBudget,
                 predictedAnnualKg = predictedAnnual,
             )
         }
@@ -121,6 +126,7 @@ class CarbonViewModel(
     private val repository: CarbonRepository,
     private val motionRepository: MotionRepository? = null,
     private val mqttRepository: MqttRepository? = null,
+    private val annualBudgetFlow: StateFlow<Double>? = null,
 ) : ViewModel() {
 
     private val dayTicker = flow {
@@ -138,11 +144,13 @@ class CarbonViewModel(
         repository.entries,
         dayTicker,
         mqttRepository?.todayEnergyCo2eKg ?: flowOf(0.0),
-    ) { allEntries, now, mqttEnergyKg ->
+        annualBudgetFlow ?: flowOf(null),
+    ) { allEntries, now, mqttEnergyKg, configuredAnnualBudget ->
         DashboardUiState.fromEntries(
             entries = allEntries,
             extraEnergyKg = mqttEnergyKg,
             nowMillis = now,
+            annualBudgetKg = configuredAnnualBudget,
         )
     }.onEach { state ->
         mqttRepository?.onBudgetEvaluated(state.status, state.totalKg, state.budgetKg)
@@ -189,7 +197,12 @@ class CarbonViewModel(
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as CarbonApplication
-                CarbonViewModel(app.carbonRepository, app.motionRepository, app.mqttRepository)
+                CarbonViewModel(
+                    repository = app.carbonRepository,
+                    motionRepository = app.motionRepository,
+                    mqttRepository = app.mqttRepository,
+                    annualBudgetFlow = app.annualBudgetKg,
+                )
             }
         }
 
