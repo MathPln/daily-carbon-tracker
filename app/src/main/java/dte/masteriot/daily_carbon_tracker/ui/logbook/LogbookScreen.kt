@@ -81,6 +81,7 @@ import dte.masteriot.daily_carbon_tracker.utils.formatCo2e
 import dte.masteriot.daily_carbon_tracker.utils.formatFactor
 import dte.masteriot.daily_carbon_tracker.utils.formatNumber
 import dte.masteriot.daily_carbon_tracker.utils.formatTime
+import kotlinx.coroutines.delay
 
 @Composable
 fun LogbookScreen(
@@ -109,6 +110,20 @@ fun LogbookContent(
 ) {
     var suggestedFactorId by rememberSaveable { mutableStateOf<String?>(null) }
 
+    // Require sustained motion for 3s so picking up the phone does not trigger false suggestions
+    var confirmedMotion by rememberSaveable { mutableStateOf<DetectedMotion?>(null) }
+    LaunchedEffect(state.suggestedMotion) {
+        val rawMotion = state.suggestedMotion
+        if (rawMotion == null || rawMotion == DetectedMotion.STATIC || rawMotion.factorId == null) {
+            confirmedMotion = null
+        } else {
+            delay(3_000L)
+            if (state.suggestedMotion == rawMotion) {
+                confirmedMotion = rawMotion
+            }
+        }
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -117,16 +132,20 @@ fun LogbookContent(
         item(key = "source") {
             FactorSourceBanner(source = state.factorSource, onRetry = onRetryFactors)
         }
-        state.suggestedMotion?.let { motion ->
+        confirmedMotion?.let { motion ->
             if (motion != DetectedMotion.STATIC && motion.factorId != null) {
                 item(key = "motion_suggestion") {
                     MotionSuggestionBanner(
                         motion = motion,
                         onAccept = {
                             suggestedFactorId = motion.factorId
+                            confirmedMotion = null
                             onDismissSuggestion()
                         },
-                        onDismiss = onDismissSuggestion,
+                        onDismiss = {
+                            confirmedMotion = null
+                            onDismissSuggestion()
+                        },
                     )
                 }
             }
