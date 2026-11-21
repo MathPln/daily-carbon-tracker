@@ -95,4 +95,20 @@
     <string name="energy_readings_empty">No readings received yet. Publish a JSON payload on home/energy from the Ubuntu VM.</string>
     <string name="energy_reading_values">Electricity: %1$s kWh · Gas: %2$s m³</string>
     <string name="mqtt_alerts_sent_title">Published alerts (carbon/alerts)</string>
+
+    <string name="map_comparison_title">Route CO2e comparison</string>
+    <string name="map_tap_hint">Tap the map to set start and destination points.</string>
+    <string name="map_pick_start">Tap anywhere on the map to choose a starting point.</string>
+    <string name="map_pick_end">Tap a second point on the map to choose a destination.</string>
+    <string name="map_marker_start">Start</string>
+    <string name="map_marker_end">Destination</string>
+    <string name="map_marker_my_location">My location</string>
+    <string name="map_location_permission_denied">Location permission denied</string>
+    <string name="map_location_unavailable">Current location unavailable</string>
+    <string name="map_my_location">Center on my location</string>
+    <string name="map_clear_route">Clear route</string>
+    <string name="map_mode_public_transport">Public transport (Bus)</string>
+    <string name="map_route_details">%1$s km · %2$d min</string>
+    <string name="map_log_trip">Add selected trip to logbook</string>
+    <string name="map_trip_logged">Trip added to logbook (%1$s)</string>
 </resources>

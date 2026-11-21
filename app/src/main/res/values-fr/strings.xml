@@ -95,4 +95,20 @@
     <string name="energy_readings_empty">Aucun relevé reçu. Publiez un message JSON sur home/energy depuis la VM Ubuntu.</string>
     <string name="energy_reading_values">Électricité : %1$s kWh · Gaz : %2$s m³</string>
     <string name="mqtt_alerts_sent_title">Alertes publiées (carbon/alerts)</string>
+
+    <string name="map_comparison_title">Comparatif CO2e de l\'itinéraire</string>
+    <string name="map_tap_hint">Touchez la carte pour définir le départ et la destination.</string>
+    <string name="map_pick_start">Touchez la carte pour choisir un point de départ.</string>
+    <string name="map_pick_end">Touchez un second point sur la carte pour choisir la destination.</string>
+    <string name="map_marker_start">Départ</string>
+    <string name="map_marker_end">Destination</string>
+    <string name="map_marker_my_location">Ma position</string>
+    <string name="map_location_permission_denied">Permission de localisation refusée</string>
+    <string name="map_location_unavailable">Position actuelle indisponible</string>
+    <string name="map_my_location">Centrer sur ma position</string>
+    <string name="map_clear_route">Effacer l\'itinéraire</string>
+    <string name="map_mode_public_transport">Transports en commun (Bus)</string>
+    <string name="map_route_details">%1$s km · %2$d min</string>
+    <string name="map_log_trip">Ajouter ce trajet au journal</string>
+    <string name="map_trip_logged">Trajet ajouté au journal (%1$s)</string>
 </resources>

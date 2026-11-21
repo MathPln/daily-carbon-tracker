@@ -7,7 +7,9 @@ android {
     namespace = "dte.masteriot.daily_carbon_tracker"
     compileSdk {
         // 37 requis par MQTTastic 0.4.0 et les bibliothèques AndroidX récentes
-        version = release(37)
+        version = release(37) {
+            minorApiLevel = 1
+        }
     }
 
     defaultConfig {
@@ -40,6 +42,7 @@ dependencies {
     // Compose & AndroidX
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.ui)
