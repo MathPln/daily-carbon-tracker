@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
+import android.graphics.DashPathEffect
 import android.location.Geocoder
 import android.location.LocationManager
 import android.widget.Toast
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -40,6 +42,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -80,6 +83,8 @@ fun MapRouteScreen(
     var userMarkerPoint by remember { mutableStateOf<GeoPoint?>(null) }
     var startInput by remember { mutableStateOf("Calle de Nikola Tesla, Madrid") }
     var endInput by remember { mutableStateOf("Puerta del Sol, Madrid") }
+    var walkMinInput by remember(state.customWalkMinutes) { mutableStateOf(state.customWalkMinutes.toString()) }
+    var totalMinInput by remember(state.customTotalMinutes) { mutableStateOf(state.customTotalMinutes.toString()) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -158,12 +163,21 @@ fun MapRouteScreen(
                         override fun longPressHelper(p: GeoPoint): Boolean = false
                     }))
 
-                    if (state.startPoint != null && state.endPoint != null) {
-                        view.overlays.add(Polyline(view).apply {
-                            setPoints(listOf(state.startPoint, state.endPoint))
-                            outlinePaint.color = AndroidColor.parseColor("#1B6C45")
-                            outlinePaint.strokeWidth = 10f
-                        })
+                    // Render route segments (dashed line for transit, solid line for road/bike/walk)
+                    state.activeSegments.forEach { segment ->
+                        if (segment.points.size >= 2) {
+                            view.overlays.add(Polyline(view).apply {
+                                setPoints(segment.points)
+                                if (segment.isDashed) {
+                                    outlinePaint.color = AndroidColor.parseColor("#1565C0")
+                                    outlinePaint.strokeWidth = 9f
+                                    outlinePaint.pathEffect = DashPathEffect(floatArrayOf(18f, 12f), 0f)
+                                } else {
+                                    outlinePaint.color = AndroidColor.parseColor("#1B6C45")
+                                    outlinePaint.strokeWidth = 10f
+                                }
+                            })
+                        }
                     }
                     userMarkerPoint?.let { pt ->
                         view.overlays.add(Marker(view).apply {
@@ -242,13 +256,64 @@ fun MapRouteScreen(
                     .fillMaxWidth()
                     .heightIn(min = 48.dp),
             ) {
-                Text("Update route")
+                Text(if (state.isLoadingRoute) "Calculating route..." else "Update route")
             }
+
+            if (state.selectedMode == TransportMode.PUBLIC_TRANSPORT) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    TransitChoice.entries.forEach { choice ->
+                        FilterChip(
+                            selected = choice == state.transitChoice,
+                            onClick = { viewModel.selectTransitChoice(choice) },
+                            label = { Text(choice.label) },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        )
+                    }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    OutlinedTextField(
+                        value = walkMinInput,
+                        onValueChange = {
+                            walkMinInput = it
+                            viewModel.updateTransitDurations(walkMinInput, totalMinInput)
+                        },
+                        label = { Text("Walk (min)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = totalMinInput,
+                        onValueChange = {
+                            totalMinInput = it
+                            viewModel.updateTransitDurations(walkMinInput, totalMinInput)
+                        },
+                        label = { Text("Total (min)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                state.transitBreakdown?.let { b ->
+                    Text(
+                        text = "Walk: ${formatNumber(b.walkKm)} km (${b.walkMinutes} min, ${formatCo2e(b.walkCo2eKg)}) + " +
+                                "${b.choice.label}: ${formatNumber(b.transitKm)} km (${b.transitMinutes} min, ${formatCo2e(b.transitCo2eKg)})",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+
             state.routeOptions.forEach { option ->
                 val label = when (option.mode) {
                     TransportMode.WALK -> stringResource(R.string.factor_walk)
                     TransportMode.BIKE -> stringResource(R.string.factor_bike)
-                    TransportMode.PUBLIC_TRANSPORT -> "Bus"
+                    TransportMode.PUBLIC_TRANSPORT -> "Transit (${state.transitChoice.label})"
                     TransportMode.CAR -> stringResource(R.string.factor_car_thermal)
                 }
                 FilterChip(
