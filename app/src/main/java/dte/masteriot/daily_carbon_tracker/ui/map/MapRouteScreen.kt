@@ -69,6 +69,7 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import java.util.Locale
 
+// Renders the interactive map, route inputs, transport mode selector, and logbook action
 @Composable
 fun MapRouteScreen(
     modifier: Modifier = Modifier,
@@ -83,6 +84,7 @@ fun MapRouteScreen(
     var startInput by remember { mutableStateOf("Calle de Nikola Tesla, Madrid") }
     var endInput by remember { mutableStateOf("Puerta del Sol, Madrid") }
 
+    // Create and configure the osmdroid MapView once
     val mapView = remember {
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)
@@ -92,6 +94,7 @@ fun MapRouteScreen(
         }
     }
 
+    // Center the map on the user's current location and set it as start point
     val moveToCurrentLocation = {
         val loc = getLastLocation(context)
         if (loc != null) {
@@ -104,6 +107,7 @@ fun MapRouteScreen(
         }
     }
 
+    // Request location permission and trigger moveToCurrentLocation once granted
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -111,6 +115,7 @@ fun MapRouteScreen(
         else Toast.makeText(context, "Location permission denied", Toast.LENGTH_SHORT).show()
     }
 
+    // Keep MapView lifecycle in sync with the screen and detach it on disposal
     DisposableEffect(lifecycleOwner, mapView) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) mapView.onResume()
@@ -124,20 +129,21 @@ fun MapRouteScreen(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
+        // Top half: interactive osmdroid map inside Compose
         Box(modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
             AndroidView(
                 factory = { mapView },
                 modifier = Modifier.fillMaxSize(),
                 update = { view ->
-                    // Invert and slightly darken map tiles when system dark mode is enabled
+                    // Invert and darken map tiles in system dark mode
                     view.overlayManager.tilesOverlay.setColorFilter(
                         if (isDarkTheme) {
                             val matrix = ColorMatrix(
                                 floatArrayOf(
                                     -0.85f,  0.0f,   0.0f,  0f, 220f,
-                                    0.0f, -0.85f,   0.0f,  0f, 220f,
-                                    0.0f,  0.0f,  -0.85f,  0f, 230f,
-                                    0.0f,  0.0f,   0.0f,  1f,   0f,
+                                     0.0f, -0.85f,   0.0f,  0f, 220f,
+                                     0.0f,  0.0f,  -0.85f,  0f, 230f,
+                                     0.0f,  0.0f,   0.0f,  1f,   0f,
                                 )
                             )
                             ColorMatrixColorFilter(matrix)
@@ -146,6 +152,7 @@ fun MapRouteScreen(
                         }
                     )
 
+                    // Rebuild map overlays (tap listener, route line, start/end markers)
                     view.overlays.clear()
                     view.overlays.add(MapEventsOverlay(object : MapEventsReceiver {
                         override fun singleTapConfirmedHelper(p: GeoPoint): Boolean {
@@ -155,7 +162,7 @@ fun MapRouteScreen(
                         override fun longPressHelper(p: GeoPoint) = false
                     }))
 
-                    // Draw dashed route line for every mode (yellow in dark mode)
+                    // Dashed route line (yellow in dark mode for visibility)
                     if (state.routePoints.size >= 2) {
                         view.overlays.add(Polyline(view).apply {
                             setPoints(state.routePoints)
@@ -191,6 +198,7 @@ fun MapRouteScreen(
             }
         }
 
+        // Bottom half: address inputs, transport mode options, and logbook button
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -217,6 +225,7 @@ fun MapRouteScreen(
             Button(
                 onClick = {
                     scope.launch {
+                        // Geocode start and end inputs off the main thread before updating the route
                         val startGeo = withContext(Dispatchers.IO) { resolveLocation(context, startInput) }
                         val endGeo = withContext(Dispatchers.IO) { resolveLocation(context, endInput) }
                         if (startGeo == null && endGeo == null) {
@@ -232,6 +241,7 @@ fun MapRouteScreen(
                 Text(if (state.isLoading) "Calculating..." else "Update route")
             }
 
+            // One selectable chip per mode showing icon, estimated distance, duration, and CO2e
             state.routeOptions.forEach { option ->
                 val (icon, descriptionRes) = when (option.mode) {
                     TransportMode.WALK -> Icons.AutoMirrored.Filled.DirectionsWalk to R.string.factor_walk
@@ -267,6 +277,7 @@ fun MapRouteScreen(
     }
 }
 
+// Formats a duration in minutes into minutes, hours, or days
 private fun formatDuration(minutes: Int): String = when {
     minutes < 60 -> "$minutes min"
     minutes < 24 * 60 -> {
@@ -281,6 +292,7 @@ private fun formatDuration(minutes: Int): String = when {
     }
 }
 
+// Parses "lat, lon" coordinates or geocodes a street address into a GeoPoint
 private fun resolveLocation(context: Context, input: String): GeoPoint? {
     val parts = input.trim().split(",")
     if (parts.size == 2) {
@@ -300,6 +312,7 @@ private fun resolveLocation(context: Context, input: String): GeoPoint? {
     }
 }
 
+// Returns the last known location from GPS first, falling back to network provider
 private fun getLastLocation(context: Context) = try {
     val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     manager.getLastKnownLocation(LocationManager.GPS_PROVIDER)

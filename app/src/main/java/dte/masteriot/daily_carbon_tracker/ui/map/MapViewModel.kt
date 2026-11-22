@@ -24,6 +24,7 @@ import java.net.URL
 import java.util.Locale
 import kotlin.math.roundToInt
 
+// Holds the current UI state of the map screen (points, route, modes, loading flag)
 data class MapUiState(
     val startPoint: GeoPoint? = GeoPoint(40.3897, -3.6279),
     val endPoint: GeoPoint? = GeoPoint(40.4168, -3.7038),
@@ -37,13 +38,16 @@ class MapViewModel(
     private val carbonRepository: CarbonRepository,
 ) : ViewModel() {
 
+    // Mutable internal state; exposed read-only via uiState
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
+    // Computes an initial route on startup using the default start and end points
     init {
         calculateRoutes()
     }
 
+    // Sets the start point on the 1st tap, the destination on the 2nd, and starts over on the 3rd
     fun onMapTap(point: GeoPoint) {
         val current = _uiState.value
         when {
@@ -55,11 +59,13 @@ class MapViewModel(
         }
     }
 
+    // Updates the start coordinate and triggers a route recalculation
     fun setStartPoint(point: GeoPoint) {
         _uiState.update { it.copy(startPoint = point) }
         calculateRoutes()
     }
 
+    // Updates start and/or end coordinates and triggers a route recalculation
     fun setRoutePoints(start: GeoPoint?, end: GeoPoint?) {
         _uiState.update {
             it.copy(startPoint = start ?: it.startPoint, endPoint = end ?: it.endPoint)
@@ -67,10 +73,12 @@ class MapViewModel(
         calculateRoutes()
     }
 
+    // Updates the currently selected transport mode in state
     fun selectMode(mode: TransportMode) {
         _uiState.update { it.copy(selectedMode = mode) }
     }
 
+    // Saves the selected transport mode and distance into the carbon logbook
     fun logSelectedRoute() {
         val state = _uiState.value
         val option = state.routeOptions.firstOrNull { it.mode == state.selectedMode } ?: return
@@ -83,12 +91,14 @@ class MapViewModel(
         carbonRepository.addActivity(factorId, option.distanceKm)
     }
 
+    // Fetches the route (or falls back offline) and computes duration and CO2e per transport mode
     private fun calculateRoutes() {
         val start = _uiState.value.startPoint ?: return
         val end = _uiState.value.endPoint ?: return
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
+            // Run network call on Dispatchers.IO so the UI thread stays responsive
             val osrmResult = withContext(Dispatchers.IO) { fetchOsrmRoute(start, end) }
 
             // Fallback to straight-line distance * 1.25 if offline or OSRM fails
@@ -109,6 +119,7 @@ class MapViewModel(
         }
     }
 
+    // Queries the OSRM routing API and returns road distance (km) and route GeoPoints
     private fun fetchOsrmRoute(start: GeoPoint, end: GeoPoint): Pair<Double, List<GeoPoint>>? {
         return try {
             val urlStr = String.format(
@@ -127,6 +138,7 @@ class MapViewModel(
             val distanceKm = (route.optDouble("distance", 0.0) / 1000.0).coerceAtLeast(0.2)
             val coords = route.optJSONObject("geometry")?.optJSONArray("coordinates") ?: return null
 
+            // GeoJSON uses [longitude, latitude], so pass index 1 as lat and index 0 as lon
             val points = (0 until coords.length()).mapNotNull { i ->
                 val pair = coords.optJSONArray(i)
                 if (pair != null && pair.length() >= 2) GeoPoint(pair.getDouble(1), pair.getDouble(0)) else null
@@ -138,6 +150,7 @@ class MapViewModel(
     }
 
     companion object {
+        // Creates MapViewModel and injects CarbonRepository from CarbonApplication
         val Factory = viewModelFactory {
             initializer {
                 val app = this[APPLICATION_KEY] as CarbonApplication
