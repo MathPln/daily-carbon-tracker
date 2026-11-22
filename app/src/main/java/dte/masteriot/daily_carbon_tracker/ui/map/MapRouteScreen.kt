@@ -3,29 +3,33 @@ package dte.masteriot.daily_carbon_tracker.ui.map
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.DashPathEffect
 import android.location.Geocoder
 import android.location.LocationManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsBike
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.DirectionsBus
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -39,10 +43,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -76,37 +78,10 @@ fun MapRouteScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isDarkTheme = isSystemInDarkTheme()
 
-    var locationTrigger by remember { mutableStateOf(0) }
-    var lastHandledTrigger by remember { mutableStateOf(0) }
-    var userMarkerPoint by remember { mutableStateOf<GeoPoint?>(null) }
     var startInput by remember { mutableStateOf("Calle de Nikola Tesla, Madrid") }
     var endInput by remember { mutableStateOf("Puerta del Sol, Madrid") }
-    var walkMinInput by remember(state.customWalkMinutes) { mutableStateOf(state.customWalkMinutes.toString()) }
-    var totalMinInput by remember(state.customTotalMinutes) { mutableStateOf(state.customTotalMinutes.toString()) }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { grants ->
-        val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-                grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) {
-            locationTrigger++
-        } else {
-            Toast.makeText(context, "Location permission denied", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    val requestLocation: () -> Unit = {
-        val fineOk = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val coarseOk = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (fineOk || coarseOk) {
-            locationTrigger++
-        } else {
-            permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-        }
-    }
 
     val mapView = remember {
         MapView(context).apply {
@@ -117,14 +92,29 @@ fun MapRouteScreen(
         }
     }
 
-    // Keep osmdroid lifecycle in sync with the screen
+    val moveToCurrentLocation = {
+        val loc = getLastLocation(context)
+        if (loc != null) {
+            val pt = GeoPoint(loc.latitude, loc.longitude)
+            startInput = String.format(Locale.US, "%.4f, %.4f", pt.latitude, pt.longitude)
+            mapView.controller.animateTo(pt)
+            viewModel.setStartPoint(pt)
+        } else {
+            Toast.makeText(context, "Location unavailable", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) moveToCurrentLocation()
+        else Toast.makeText(context, "Location permission denied", Toast.LENGTH_SHORT).show()
+    }
+
     DisposableEffect(lifecycleOwner, mapView) {
         val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
-                else -> Unit
-            }
+            if (event == Lifecycle.Event.ON_RESUME) mapView.onResume()
+            else if (event == Lifecycle.Event.ON_PAUSE) mapView.onPause()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
@@ -133,25 +123,28 @@ fun MapRouteScreen(
         }
     }
 
-    val mapBox: @Composable (Modifier) -> Unit = { boxModifier ->
-        Box(modifier = boxModifier.clipToBounds()) {
+    Column(modifier = modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
             AndroidView(
                 factory = { mapView },
                 modifier = Modifier.fillMaxSize(),
                 update = { view ->
-                    if (locationTrigger > lastHandledTrigger) {
-                        lastHandledTrigger = locationTrigger
-                        val loc = getLastLocation(context)
-                        if (loc != null) {
-                            val pt = GeoPoint(loc.latitude, loc.longitude)
-                            userMarkerPoint = pt
-                            startInput = "${formatCoord(pt.latitude)}, ${formatCoord(pt.longitude)}"
-                            view.controller.animateTo(pt)
-                            viewModel.setStartPoint(pt)
+                    // Invert and slightly darken map tiles when system dark mode is enabled
+                    view.overlayManager.tilesOverlay.setColorFilter(
+                        if (isDarkTheme) {
+                            val matrix = ColorMatrix(
+                                floatArrayOf(
+                                    -0.85f,  0.0f,   0.0f,  0f, 220f,
+                                    0.0f, -0.85f,   0.0f,  0f, 220f,
+                                    0.0f,  0.0f,  -0.85f,  0f, 230f,
+                                    0.0f,  0.0f,   0.0f,  1f,   0f,
+                                )
+                            )
+                            ColorMatrixColorFilter(matrix)
                         } else {
-                            Toast.makeText(context, "Location unavailable", Toast.LENGTH_SHORT).show()
+                            null
                         }
-                    }
+                    )
 
                     view.overlays.clear()
                     view.overlays.add(MapEventsOverlay(object : MapEventsReceiver {
@@ -159,206 +152,137 @@ fun MapRouteScreen(
                             viewModel.onMapTap(p)
                             return true
                         }
-
-                        override fun longPressHelper(p: GeoPoint): Boolean = false
+                        override fun longPressHelper(p: GeoPoint) = false
                     }))
 
-                    // Render route segments (dashed line for transit, solid line for road/bike/walk)
-                    state.activeSegments.forEach { segment ->
-                        if (segment.points.size >= 2) {
-                            view.overlays.add(Polyline(view).apply {
-                                setPoints(segment.points)
-                                if (segment.isDashed) {
-                                    outlinePaint.color = AndroidColor.parseColor("#1565C0")
-                                    outlinePaint.strokeWidth = 9f
-                                    outlinePaint.pathEffect = DashPathEffect(floatArrayOf(18f, 12f), 0f)
-                                } else {
-                                    outlinePaint.color = AndroidColor.parseColor("#1B6C45")
-                                    outlinePaint.strokeWidth = 10f
-                                }
-                            })
-                        }
-                    }
-                    userMarkerPoint?.let { pt ->
-                        view.overlays.add(Marker(view).apply {
-                            position = pt
-                            title = "My location"
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    // Draw dashed route line for every mode (yellow in dark mode)
+                    if (state.routePoints.size >= 2) {
+                        view.overlays.add(Polyline(view).apply {
+                            setPoints(state.routePoints)
+                            outlinePaint.strokeWidth = 9f
+                            outlinePaint.pathEffect = DashPathEffect(floatArrayOf(18f, 12f), 0f)
+                            outlinePaint.color = when {
+                                isDarkTheme -> AndroidColor.parseColor("#FFD54F")
+                                state.selectedMode == TransportMode.PUBLIC_TRANSPORT -> AndroidColor.parseColor("#1565C0")
+                                else -> AndroidColor.parseColor("#1B6C45")
+                            }
                         })
                     }
+
                     state.startPoint?.let { pt ->
-                        view.overlays.add(Marker(view).apply {
-                            position = pt
-                            title = "Start"
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                        })
+                        view.overlays.add(Marker(view).apply { position = pt; title = "Start" })
                     }
                     state.endPoint?.let { pt ->
-                        view.overlays.add(Marker(view).apply {
-                            position = pt
-                            title = "Destination"
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                        })
+                        view.overlays.add(Marker(view).apply { position = pt; title = "Destination" })
                     }
                     view.invalidate()
                 },
             )
-            // Filled button keeps high contrast over light map tiles
+
             Button(
-                onClick = requestLocation,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp)
-                    .heightIn(min = 48.dp),
+                onClick = {
+                    val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                    if (granted) moveToCurrentLocation()
+                    else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                },
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).heightIn(min = 48.dp),
             ) {
                 Text("My location")
             }
         }
-    }
 
-    val panel: @Composable (Modifier) -> Unit = { panelModifier ->
         Column(
-            modifier = panelModifier
-                .background(MaterialTheme.colorScheme.background)
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1.1f)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Start & destination (address, lat,lon or map)", style = MaterialTheme.typography.titleMedium)
+            Text("Plan a trip", style = MaterialTheme.typography.titleMedium)
             OutlinedTextField(
                 value = startInput,
                 onValueChange = { startInput = it },
-                label = { Text("Start address or coordinates") },
+                label = { Text("Start (address or lat, lon)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = endInput,
                 onValueChange = { endInput = it },
-                label = { Text("Destination address or coordinates") },
+                label = { Text("Destination (address or lat, lon)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             Button(
                 onClick = {
                     scope.launch {
-                        val startGeo = withContext(Dispatchers.IO) { resolveAddressOrCoords(context, startInput) }
-                        val endGeo = withContext(Dispatchers.IO) { resolveAddressOrCoords(context, endInput) }
+                        val startGeo = withContext(Dispatchers.IO) { resolveLocation(context, startInput) }
+                        val endGeo = withContext(Dispatchers.IO) { resolveLocation(context, endInput) }
                         if (startGeo == null && endGeo == null) {
-                            Toast.makeText(context, "Address or coordinates not found", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Location not found", Toast.LENGTH_SHORT).show()
                         } else {
                             viewModel.setRoutePoints(startGeo, endGeo)
                             (startGeo ?: endGeo)?.let { mapView.controller.animateTo(it) }
                         }
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             ) {
-                Text(if (state.isLoadingRoute) "Calculating route..." else "Update route")
-            }
-
-            if (state.selectedMode == TransportMode.PUBLIC_TRANSPORT) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    TransitChoice.entries.forEach { choice ->
-                        FilterChip(
-                            selected = choice == state.transitChoice,
-                            onClick = { viewModel.selectTransitChoice(choice) },
-                            label = { Text(choice.label) },
-                            modifier = Modifier.heightIn(min = 48.dp),
-                        )
-                    }
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    OutlinedTextField(
-                        value = walkMinInput,
-                        onValueChange = {
-                            walkMinInput = it
-                            viewModel.updateTransitDurations(walkMinInput, totalMinInput)
-                        },
-                        label = { Text("Walk (min)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                    OutlinedTextField(
-                        value = totalMinInput,
-                        onValueChange = {
-                            totalMinInput = it
-                            viewModel.updateTransitDurations(walkMinInput, totalMinInput)
-                        },
-                        label = { Text("Total (min)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                state.transitBreakdown?.let { b ->
-                    Text(
-                        text = "Walk: ${formatNumber(b.walkKm)} km (${b.walkMinutes} min, ${formatCo2e(b.walkCo2eKg)}) + " +
-                                "${b.choice.label}: ${formatNumber(b.transitKm)} km (${b.transitMinutes} min, ${formatCo2e(b.transitCo2eKg)})",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
+                Text(if (state.isLoading) "Calculating..." else "Update route")
             }
 
             state.routeOptions.forEach { option ->
-                val label = when (option.mode) {
-                    TransportMode.WALK -> stringResource(R.string.factor_walk)
-                    TransportMode.BIKE -> stringResource(R.string.factor_bike)
-                    TransportMode.PUBLIC_TRANSPORT -> "Transit (${state.transitChoice.label})"
-                    TransportMode.CAR -> stringResource(R.string.factor_car_thermal)
+                val (icon, descriptionRes) = when (option.mode) {
+                    TransportMode.WALK -> Icons.AutoMirrored.Filled.DirectionsWalk to R.string.factor_walk
+                    TransportMode.BIKE -> Icons.AutoMirrored.Filled.DirectionsBike to R.string.factor_bike
+                    TransportMode.PUBLIC_TRANSPORT -> Icons.Filled.DirectionsBus to R.string.factor_bus
+                    TransportMode.CAR -> Icons.Filled.DirectionsCar to R.string.factor_car_thermal
                 }
+                val description = stringResource(descriptionRes)
                 FilterChip(
                     selected = option.mode == state.selectedMode,
                     onClick = { viewModel.selectMode(option.mode) },
-                    label = {
-                        Text("$label · ${formatNumber(option.distanceKm)} km · ${option.durationMinutes} min · ${formatCo2e(option.co2eKg)}")
+                    leadingIcon = {
+                        Icon(imageVector = icon, contentDescription = description)
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 48.dp),
+                    label = {
+                        Text("~${formatNumber(option.distanceKm)} km · ${formatDuration(option.durationMinutes)} · ${formatCo2e(option.co2eKg)}")
+                    },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 )
             }
+
             Button(
                 onClick = {
                     viewModel.logSelectedRoute()
                     Toast.makeText(context, "Trip added to logbook", Toast.LENGTH_SHORT).show()
                 },
                 enabled = state.routeOptions.isNotEmpty(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             ) {
                 Text("Add trip to logbook")
             }
         }
     }
+}
 
-    if (isLandscape) {
-        Row(modifier = modifier.fillMaxSize()) {
-            mapBox(Modifier.weight(1.1f).fillMaxHeight())
-            panel(Modifier.weight(1f).fillMaxHeight())
-        }
-    } else {
-        Column(modifier = modifier.fillMaxSize()) {
-            mapBox(Modifier.fillMaxWidth().weight(1f))
-            panel(Modifier.fillMaxWidth().weight(1.1f))
-        }
+private fun formatDuration(minutes: Int): String = when {
+    minutes < 60 -> "$minutes min"
+    minutes < 24 * 60 -> {
+        val h = minutes / 60
+        val m = minutes % 60
+        if (m == 0) "$h h" else "$h h $m min"
+    }
+    else -> {
+        val d = minutes / (24 * 60)
+        val h = (minutes % (24 * 60)) / 60
+        if (h == 0) "$d d" else "$d d $h h"
     }
 }
 
-private fun resolveAddressOrCoords(context: Context, input: String): GeoPoint? {
-    val trimmed = input.trim()
-    if (trimmed.isEmpty()) return null
-    val parts = trimmed.split(",")
+private fun resolveLocation(context: Context, input: String): GeoPoint? {
+    val parts = input.trim().split(",")
     if (parts.size == 2) {
         val lat = parts[0].trim().toDoubleOrNull()
         val lon = parts[1].trim().toDoubleOrNull()
@@ -369,15 +293,12 @@ private fun resolveAddressOrCoords(context: Context, input: String): GeoPoint? {
     return try {
         if (!Geocoder.isPresent()) return null
         @Suppress("DEPRECATION")
-        val matches = Geocoder(context, Locale.getDefault()).getFromLocationName(trimmed, 1)
-        val match = matches?.firstOrNull()
+        val match = Geocoder(context, Locale.getDefault()).getFromLocationName(input.trim(), 1)?.firstOrNull()
         if (match != null) GeoPoint(match.latitude, match.longitude) else null
     } catch (_: Exception) {
         null
     }
 }
-
-private fun formatCoord(value: Double): String = String.format(Locale.US, "%.4f", value)
 
 private fun getLastLocation(context: Context) = try {
     val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
