@@ -216,8 +216,7 @@ private fun BudgetGaugeCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
-                // TalkBack lit une seule phrase complète au lieu de morceaux de texte
-                .clearAndSetSemantics { contentDescription = description },
+                .semantics(mergeDescendants = true) {},
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

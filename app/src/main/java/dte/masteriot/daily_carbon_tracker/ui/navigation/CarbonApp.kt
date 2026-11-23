@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -86,9 +87,13 @@ fun CarbonApp(
         topBar = {
             TopAppBar(
                 title = {
+                    val titleText = stringResource(currentDestination.labelRes)
                     Text(
-                        text = stringResource(currentDestination.labelRes),
-                        modifier = Modifier.semantics { heading() },
+                        text = titleText,
+                        modifier = Modifier.semantics {
+                            heading()
+                            contentDescription = "$titleText screen"
+                        },
                     )
                 },
                 actions = {
@@ -111,6 +116,7 @@ fun CarbonApp(
             NavigationBar {
                 TopLevelDestination.entries.forEach { destination ->
                     val selected = destination == currentDestination
+                    val labelText = stringResource(destination.labelRes)
                     NavigationBarItem(
                         selected = selected,
                         onClick = { navigateTo(destination) },
@@ -120,7 +126,12 @@ fun CarbonApp(
                                 contentDescription = null,
                             )
                         },
-                        label = { Text(stringResource(destination.labelRes)) },
+                        label = {
+                            Text(
+                                text = labelText,
+                                modifier = Modifier.semantics { contentDescription = "$labelText tab" },
+                            )
+                        },
                     )
                 }
             }
