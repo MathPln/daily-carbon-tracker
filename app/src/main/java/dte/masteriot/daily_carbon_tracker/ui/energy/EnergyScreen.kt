@@ -30,7 +30,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -38,13 +37,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dte.masteriot.daily_carbon_tracker.CarbonApplication
 import dte.masteriot.daily_carbon_tracker.R
 import dte.masteriot.daily_carbon_tracker.data.model.EnergyReading
 import dte.masteriot.daily_carbon_tracker.data.repository.MqttRepository.Companion.toCo2eKg
 import dte.masteriot.daily_carbon_tracker.data.repository.MqttStatus
 import dte.masteriot.daily_carbon_tracker.ui.common.AppCard
-import dte.masteriot.daily_carbon_tracker.ui.dashboard.BudgetStatus
 import dte.masteriot.daily_carbon_tracker.ui.dashboard.CarbonViewModel
 import dte.masteriot.daily_carbon_tracker.utils.formatCo2e
 import dte.masteriot.daily_carbon_tracker.utils.formatNumber
@@ -53,16 +50,14 @@ import dte.masteriot.daily_carbon_tracker.utils.formatTime
 @Composable
 fun EnergyScreen(
     modifier: Modifier = Modifier,
+    energyViewModel: EnergyViewModel = viewModel(factory = EnergyViewModel.Factory),
     carbonViewModel: CarbonViewModel = viewModel(factory = CarbonViewModel.Factory),
 ) {
-    val app = LocalContext.current.applicationContext as CarbonApplication
-    val mqtt = app.mqttRepository
-
-    val status by mqtt.status.collectAsStateWithLifecycle()
-    val brokerConfig by mqtt.brokerConfig.collectAsStateWithLifecycle()
-    val lastError by mqtt.lastError.collectAsStateWithLifecycle()
-    val readings by mqtt.readings.collectAsStateWithLifecycle()
-    val sentAlerts by mqtt.sentAlerts.collectAsStateWithLifecycle()
+    val status by energyViewModel.status.collectAsStateWithLifecycle()
+    val brokerConfig by energyViewModel.brokerConfig.collectAsStateWithLifecycle()
+    val lastError by energyViewModel.lastError.collectAsStateWithLifecycle()
+    val readings by energyViewModel.readings.collectAsStateWithLifecycle()
+    val sentAlerts by energyViewModel.sentAlerts.collectAsStateWithLifecycle()
     val dashboardState by carbonViewModel.dashboardState.collectAsStateWithLifecycle()
 
     LazyColumn(
@@ -124,12 +119,12 @@ fun EnergyScreen(
                     Spacer(Modifier.height(12.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (status == MqttStatus.CONNECTED) {
-                            OutlinedButton(onClick = { mqtt.disconnect() }) {
+                            OutlinedButton(onClick = { energyViewModel.disconnect() }) {
                                 Text(stringResource(R.string.mqtt_disconnect))
                             }
                         } else {
                             Button(
-                                onClick = { mqtt.connect() },
+                                onClick = { energyViewModel.connect() },
                                 enabled = status != MqttStatus.CONNECTING,
                             ) {
                                 Text(stringResource(R.string.mqtt_connect))
@@ -175,13 +170,8 @@ fun EnergyScreen(
                     Spacer(Modifier.height(12.dp))
                     FilledTonalButton(
                         onClick = {
-                            val alertStatus = if (dashboardState.status == BudgetStatus.WITHIN) {
-                                BudgetStatus.WARNING
-                            } else {
-                                dashboardState.status
-                            }
-                            mqtt.publishBudgetAlert(
-                                status = alertStatus,
+                            energyViewModel.publishManualAlert(
+                                currentStatus = dashboardState.status,
                                 totalKg = dashboardState.totalKg,
                                 budgetKg = dashboardState.budgetKg,
                             )
